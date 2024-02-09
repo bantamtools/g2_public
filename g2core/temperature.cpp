@@ -1168,8 +1168,8 @@ float cm_get_fan_power(const uint8_t heater)
 {
     switch(heater) {
         case 1: { return std::min(1.0f, heater_fan1.max_value); }
-//      case 2: { return min(1.0f, heater_fan2.max_value); }
-//      case 3: { return min(1.0f, heater_fan3.max_value); }
+//      case 2: { return std::min(1.0, heater_fan2.max_value); }
+//      case 3: { return std::min(1.0, heater_fan3.max_value); }
         default: { break; }
     }
     return 0.0;
@@ -1187,8 +1187,8 @@ void cm_set_fan_power(const uint8_t heater, const float value)
 {
     switch(heater) {
         case 1: { heater_fan1.max_value = std::max(0.0f, value); break; }
-//      case 2: { heater_fan2.max_value = max(0.0, value); break; }
-//      case 3: { heater_fan3.max_value = max(0.0, value); break; }
+//      case 2: { heater_fan2.max_value = std::max(0.0, value); break; }
+//      case 3: { heater_fan3.max_value = std::max(0.0, value); break; }
         default: { break; }
     }
 }
@@ -1279,8 +1279,8 @@ stat_t cm_set_fan_high_temp(nvObj_t *nv)
 {
     switch(_get_heater_number(nv)) {
         case '1': { heater_fan1.high_temp = std::min(0.0, nv->value_flt); break; }
-//      case '2': { heater_fan2.high_temp = min(0.0f, nv->value_flt); break; }
-//      case '3': { heater_fan3.high_temp = min(0.0f, nv->value_flt); break; }
+//      case '2': { heater_fan2.high_temp = std::min(0.0f nv->value_flt); break; }
+//      case '3': { heater_fan3.high_temp = std::min(0.0f nv->value_flt); break; }
         default: { break; }
     }
     return (STAT_OK);

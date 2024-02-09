@@ -86,14 +86,7 @@ extern StepDirStepper<Motate::kSocket4_StepPinNumber,
 //    Motate::kSocket6_Microstep_2PinNumber,
 //    Motate::kSocket6_VrefPinNumber> motor_6 {};
 
-#if HAS_LASER
-#include "laser_toolhead.h"
-#include "kinematics_cartesian.h"
-typedef LaserTool<BASE_KINEMATICS, LASER_FIRE_PIN_NUMBER> LaserTool_used_t;
-extern LaserTool_used_t &motor_5;
-#endif
-
-extern Stepper* const Motors[MOTORS];
+extern Stepper* Motors[MOTORS];
 
 void board_stepper_init();
 

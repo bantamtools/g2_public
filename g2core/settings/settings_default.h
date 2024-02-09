@@ -86,7 +86,7 @@
 #endif
 
 #ifndef SPINDLE_ENABLE_POLARITY
-#define SPINDLE_ENABLE_POLARITY     1       // 0=active low, 1=active high
+#define SPINDLE_ENABLE_POLARITY     SPINDLE_ACTIVE_HIGH  // {spep: 0=active low, 1=active high
 #endif
 
 #ifndef SPINDLE_DIR_POLARITY
@@ -242,11 +242,9 @@
 //*****************************************************************************
 
 // KINEMATICS (which may later change the following values)
-#define KINE_OTHER -1
 #define KINE_CARTESIAN 0
 #define KINE_CORE_XY 1
 #define KINE_FOUR_CABLE 2
-#define KINE_PRESSURE 3
 
 #ifndef KINEMATICS
 #define KINEMATICS KINE_CARTESIAN
@@ -1685,6 +1683,9 @@
 #endif
 #ifndef P1_PWM_PHASE_OFF
 #define P1_PWM_PHASE_OFF            0.1
+#endif
+#ifndef P1_PWM_K_VALUE
+#define P1_PWM_K_VALUE				1.0
 #endif
 
 // *** Heater Settings - relevant to 3dp machines *** //

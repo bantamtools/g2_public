@@ -318,6 +318,14 @@ static stat_t _get_nv_pair(nvObj_t *nv, char **pstr, int8_t *depth)
         }
 
 
+        // if the double value is the same as the int, mark it as a TYPE_INTEGER
+        if ((int32_t)std::floor(nv->value_flt) == nv->value_int) {
+            nv->valuetype = TYPE_INTEGER;
+        } else {
+            nv->valuetype = TYPE_FLOAT;
+        }
+
+
         // object parent
     } else if (**pstr == '{') {
         nv->valuetype = TYPE_PARENT;

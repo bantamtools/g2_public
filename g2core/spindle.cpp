@@ -48,7 +48,12 @@ void spindle_init() {
 }
 
 void spindle_set_toolhead(ToolHead *toolhead) {
-    active_toolhead = toolhead;
+
+    // Do not reset the toolhead if it's the same as before
+    if ((active_toolhead != nullptr) && (toolhead != nullptr) && (active_toolhead == toolhead)) {
+        return;
+    }
+    active_toolhead = toolhead;      
     active_toolhead->reset();
 }
 
@@ -415,6 +420,20 @@ stat_t pwm_set_p1pof(nvObj_t *nv) {
     if (active_toolhead) { active_toolhead->set_phase_off(nv->value_flt); }
     return (STAT_OK);
 }
+stat_t pwm_get_p1k(nvObj_t *nv) {
+    if (active_toolhead) {
+        nv->value_flt = active_toolhead->get_k_value();
+        nv->valuetype = TYPE_FLOAT;
+    }
+    else {
+        nv->valuetype = TYPE_NULL;
+    }
+    return (STAT_OK);
+}
+stat_t pwm_set_p1k(nvObj_t *nv) {
+    if (active_toolhead) { active_toolhead->set_k_value(nv->value_flt); }
+    return (STAT_OK);
+}
 
 /****************************************************************************************
  * TEXT MODE SUPPORT
@@ -457,6 +476,7 @@ static const char fmt_p1wsh[] = "[p1wsh] pwm ccw speed hi%15.0f RPM\n";
 static const char fmt_p1wpl[] = "[p1wpl] pwm ccw phase lo%15.3f [0..1]\n";
 static const char fmt_p1wph[] = "[p1wph] pwm ccw phase hi%15.3f [0..1]\n";
 static const char fmt_p1pof[] = "[p1pof] pwm phase off%18.3f [0..1]\n";
+static const char fmt_p1k[]   = "[p1k] pwm K value%18.3f\n";
 
 void pwm_print_p1frq(nvObj_t *nv) { text_print(nv, fmt_p1frq);}     // all TYPE_FLOAT
 void pwm_print_p1csl(nvObj_t *nv) { text_print(nv, fmt_p1csl);}
@@ -468,40 +488,6 @@ void pwm_print_p1wsh(nvObj_t *nv) { text_print(nv, fmt_p1wsh);}
 void pwm_print_p1wpl(nvObj_t *nv) { text_print(nv, fmt_p1wpl);}
 void pwm_print_p1wph(nvObj_t *nv) { text_print(nv, fmt_p1wph);}
 void pwm_print_p1pof(nvObj_t *nv) { text_print(nv, fmt_p1pof);}
+void pwm_print_p1k(nvObj_t *nv) { text_print(nv, fmt_p1k);}
 
 #endif // __TEXT_MODE
-
-#include "settings.h"
-
-constexpr cfgItem_t spindle_config_items_1[] = {
-    // Spindle functions
-    { "sp","spmo", _i0,  0, sp_print_spmo, get_nul,     set_nul,     nullptr, 0 }, // keeping this key around, but it returns null and does nothing
-    { "sp","spph", _bip, 0, sp_print_spph, sp_get_spph, sp_set_spph, nullptr, SPINDLE_PAUSE_ON_HOLD },
-    { "sp","spde", _fip, 2, sp_print_spde, sp_get_spde, sp_set_spde, nullptr, SPINDLE_SPINUP_DELAY },
-    { "sp","spsn", _fip, 2, sp_print_spsn, sp_get_spsn, sp_set_spsn, nullptr, SPINDLE_SPEED_MIN},
-    { "sp","spsm", _fip, 2, sp_print_spsm, sp_get_spsm, sp_set_spsm, nullptr, SPINDLE_SPEED_MAX},
-    { "sp","spep", _iip, 0, sp_print_spep, sp_get_spep, sp_set_spep, nullptr, SPINDLE_ENABLE_POLARITY },
-    { "sp","spdp", _iip, 0, sp_print_spdp, sp_get_spdp, sp_set_spdp, nullptr, SPINDLE_DIR_POLARITY },
-    { "sp","spoe", _bip, 0, sp_print_spoe, sp_get_spoe, sp_set_spoe, nullptr, SPINDLE_OVERRIDE_ENABLE},
-    { "sp","spo",  _fip, 3, sp_print_spo,  sp_get_spo,  sp_set_spo,  nullptr, SPINDLE_OVERRIDE_FACTOR},
-    { "sp","spc",  _i0,  0, sp_print_spc,  sp_get_spc,  sp_set_spc,  nullptr, 0 },   // spindle state
-    { "sp","sps",  _f0,  0, sp_print_sps,  sp_get_sps,  sp_set_sps,  nullptr, 0 },   // spindle speed
-};
-constexpr cfgSubtableFromStaticArray spindle_config_1 {spindle_config_items_1};
-const configSubtable * const getSpindleConfig_1() { return &spindle_config_1; }
-
-constexpr cfgItem_t p1_config_items_1[] = {
-    // PWM settings
-    { "p1","p1frq",_fip, 0, pwm_print_p1frq, pwm_get_p1frq, pwm_set_p1frq, nullptr, P1_PWM_FREQUENCY },
-    { "p1","p1csl",_fip, 0, pwm_print_p1csl, pwm_get_p1csl, pwm_set_p1csl, nullptr, P1_CW_SPEED_LO },
-    { "p1","p1csh",_fip, 0, pwm_print_p1csh, pwm_get_p1csh, pwm_set_p1csh, nullptr, P1_CW_SPEED_HI },
-    { "p1","p1cpl",_fip, 3, pwm_print_p1cpl, pwm_get_p1cpl, pwm_set_p1cpl, nullptr, P1_CW_PHASE_LO },
-    { "p1","p1cph",_fip, 3, pwm_print_p1cph, pwm_get_p1cph, pwm_set_p1cph, nullptr, P1_CW_PHASE_HI },
-    { "p1","p1wsl",_fip, 0, pwm_print_p1wsl, pwm_get_p1wsl, pwm_set_p1wsl, nullptr, P1_CCW_SPEED_LO },
-    { "p1","p1wsh",_fip, 0, pwm_print_p1wsh, pwm_get_p1wsh, pwm_set_p1wsh, nullptr, P1_CCW_SPEED_HI },
-    { "p1","p1wpl",_fip, 3, pwm_print_p1wpl, pwm_get_p1wpl, pwm_set_p1wpl, nullptr, P1_CCW_PHASE_LO },
-    { "p1","p1wph",_fip, 3, pwm_print_p1wph, pwm_get_p1wph, pwm_set_p1wph, nullptr, P1_CCW_PHASE_HI },
-    { "p1","p1pof",_fip, 3, pwm_print_p1pof, pwm_get_p1pof, pwm_set_p1pof, nullptr, P1_PWM_PHASE_OFF },
-};
-constexpr cfgSubtableFromStaticArray p1_config_1 {p1_config_items_1};
-const configSubtable * const getP1Config_1() { return &p1_config_1; }

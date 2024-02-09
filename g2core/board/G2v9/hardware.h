@@ -101,9 +101,9 @@ using Motate::OutputPin;
 
 /**** Stepper DDA and dwell timer settings ****/
 
-#define FREQUENCY_DDA		100000UL
+#define FREQUENCY_DDA		61000UL
 #define FREQUENCY_DWELL		1000UL
-#define MIN_SEGMENT_MS ((float)1.0)
+#define MIN_SEGMENT_MS ((float)0.75) //used to be 1.0 updated per Rob to increase performance
 
 #define PLANNER_QUEUE_SIZE (48)
 #define SECONDARY_QUEUE_SIZE (10)
@@ -141,8 +141,6 @@ static OutputPin<Motate::kGRBL_CommonEnablePinNumber> motor_common_enable_pin;
 /********************************
  * Function Prototypes (Common) *
  ********************************/
-
-const configSubtable *const getSysConfig_3();
 
 void hardware_init(void);			// master hardware init
 stat_t hardware_periodic();  // callback from the main loop (time sensitive)

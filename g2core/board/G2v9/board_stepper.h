@@ -59,14 +59,14 @@ extern StepDirStepper<Motate::kSocket3_StepPinNumber,
                       Motate::kSocket3_VrefPinNumber>
     motor_3;
 
-extern StepDirStepper<Motate::kSocket4_StepPinNumber,
-                      Motate::kSocket4_DirPinNumber,
-                      Motate::kSocket4_EnablePinNumber,
-                      Motate::kSocket4_Microstep_0PinNumber,
-                      Motate::kSocket4_Microstep_1PinNumber,
-                      Motate::kSocket4_Microstep_2PinNumber,
-                      Motate::kSocket4_VrefPinNumber>
-    motor_4;
+ extern StepDirStepper<
+    Motate::kSocket4_StepPinNumber,
+    Motate::kSocket4_DirPinNumber,
+    Motate::kSocket4_EnablePinNumber,
+    Motate::kSocket4_Microstep_0PinNumber,
+    Motate::kSocket4_Microstep_1PinNumber,
+    Motate::kSocket4_Microstep_2PinNumber,
+    Motate::kSocket4_VrefPinNumber> motor_4;
 
 // extern StepDirStepper<
 //    Motate::kSocket5_StepPinNumber,

@@ -53,7 +53,7 @@
  *  with the static assignments for each variable. The cfgArray contains typed data in
  *  program memory.
  *
- *  Each cfgItem_t has:
+ *  Each cfgItem has:
  *   - group string identifying what group the variable is part of or "" if no group
  *   - token string - the token for that variable - pre-pended with the group (if present)
  *   - operations flags - e.g. if the value should be initialized and/or persisted to NVM
@@ -303,7 +303,7 @@ typedef struct nvObject {               // depending on use, not all elements ma
     index_t index;                      // index of tokenized name, or -1 if no token (optional)
     valueType valuetype;                // type of value that follows: see valueType enum
     int8_t precision;                   // decimal precision for reporting floating point numbers (JSON only)
-    double value_flt;                    // floating point values
+    double value_flt;                   // floating point values
     int32_t value_int;                  // signed integer values and booleans
     char (*stringp)[];                  // string value: pointer to array of characters from shared character array
 } nvObj_t;                              // OK, so it's not REALLY an object
@@ -317,11 +317,9 @@ typedef struct nvList {
     uint16_t magic_end;
 } nvList_t;
 
-struct cfgItem_t {
-    // char group[GROUP_LEN+1];            // group prefix (with NUL termination)
-    // char token[TOKEN_LEN+1];            // token - stripped of group prefix (w/NUL termination)
-    const char *group;                  // group prefix (with NUL termination)
-    const char *token;                  // token - stripped of group prefix (w/NUL termination)
+typedef struct cfgItem {
+    char group[GROUP_LEN+1];            // group prefix (with NUL termination)
+    char token[TOKEN_LEN+1];            // token - stripped of group prefix (w/NUL termination)
     uint8_t flags;                      // operations flags - see defines below
     int8_t precision;                   // decimal precision for display (JSON)
     fptrPrint print;                    // print binding: aka void (*print)(nvObj_t *nv);
@@ -329,62 +327,13 @@ struct cfgItem_t {
     fptrCmd set;                        // SET binding aka uint8_t (*set)(nvObj_t *nv)
     void *target;                       // target for writing config value
     float def_value;                    // default value for config item
-};
+} cfgItem_t;
 
 /**** static allocation and definitions ****/
 
 extern nvStr_t nvStr;
 extern nvList_t nvl;
-
-class cfgArraySynthesizer {
-    public:
-    const cfgItem_t& operator[](std::size_t idx) const;
-    index_t getIndex(const char *group, const char *token);
-};
-
-extern cfgArraySynthesizer cfgArray;
-
-class configSubtable {
-   public:
-    virtual const cfgItem_t * const get(std::size_t idx) const;
-    virtual index_t find(const char *token) const;
-
-    constexpr configSubtable(const size_t l) : length{l} {};
-
-    const size_t length;
-};
-
-class cfgSubtableFromStaticArray : public configSubtable {
-    // const size_t array_length;
-    const cfgItem_t *items;
-
-   public:
-    template<typename T, size_t length>
-    constexpr cfgSubtableFromStaticArray(T (&i)[length]) : configSubtable{length}, items{i} {};
-
-    constexpr cfgSubtableFromStaticArray() : configSubtable{0}, items{} {};
-
-    const cfgItem_t * const get(std::size_t idx) const override {
-        return &items[idx];
-    }
-
-    index_t find(const char *token) const override {
-        std::size_t idx = 0;
-
-        while (idx < length) {
-            if (strcmp(token, items[idx].token) == 0) {
-                return idx;
-            }
-            idx++;
-        }
-        return NO_MATCH;
-    }
-
-    // const size_t length() const override {
-    //     return array_length;
-    // }
-};
-
+extern const cfgItem_t cfgArray[];
 
 //#define nv_header nv.list
 #define nv_header (&nvl.list[0])

@@ -125,6 +125,7 @@ void xio_flush_to_command();
 void xio_exit_fake_bootloader();
 #endif
 void xio_flush_device(devflags_t &flags);
+uint64_t xio_get_ticks_since_write();
 
 stat_t xio_set_spi(nvObj_t *nv);
 
@@ -163,7 +164,7 @@ extern "C" {
 #define CHAR_ALARM EOT              // Control D - Kill Job
 #define CHAR_FEEDHOLD (char)'!'     // Feedhold
 #define CHAR_CYCLE_START (char)'~'  // Feedhold Exit and Resume
-#define CHAR_QUEUE_FLUSH (char)'%'  // Feedhold Exit and Flush  
+#define CHAR_QUEUE_FLUSH (char)'%'  // Feedhold Exit and Flush
 
 /**** xio_flash_file - object to hold in-flash (compiled-in) "files" to run ****/
 

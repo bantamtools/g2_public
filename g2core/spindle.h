@@ -134,6 +134,9 @@ class ToolHead  // TODO: Move to a toolhead file
 
     virtual void set_phase_off(float new_phase_off) { /* do nothing */ }
     virtual float get_phase_off() { return 0.0; }
+
+    virtual void set_k_value(float new_k_value) { /* do nothing */ }
+    virtual float get_k_value() { return 0.0; }
 };
 
 /*
@@ -164,7 +167,117 @@ bool is_a_toolhead_busy();          // returns true if motion should continue to
 // void spindle_start_override(const float ramp_time, const float override_factor);
 // void spindle_end_override(const float ramp_time);
 
-const configSubtable *const getSpindleConfig_1();
-const configSubtable *const getP1Config_1();
+stat_t sp_get_spep(nvObj_t *nv);
+stat_t sp_set_spep(nvObj_t *nv);
+stat_t sp_get_spdp(nvObj_t *nv);
+stat_t sp_set_spdp(nvObj_t *nv);
+stat_t sp_get_spph(nvObj_t *nv);
+stat_t sp_set_spph(nvObj_t *nv);
 
+stat_t sp_get_spde(nvObj_t *nv);
+stat_t sp_set_spde(nvObj_t *nv);
+//stat_t sp_get_spdn(nvObj_t *nv);
+//stat_t sp_set_spdn(nvObj_t *nv);
+
+stat_t sp_get_spsn(nvObj_t *nv);
+stat_t sp_set_spsn(nvObj_t *nv);
+stat_t sp_get_spsm(nvObj_t *nv);
+stat_t sp_set_spsm(nvObj_t *nv);
+
+stat_t sp_get_spoe(nvObj_t* nv);
+stat_t sp_set_spoe(nvObj_t* nv);
+stat_t sp_get_spo(nvObj_t* nv);
+stat_t sp_set_spo(nvObj_t* nv);
+
+stat_t sp_get_spc(nvObj_t* nv);
+stat_t sp_set_spc(nvObj_t* nv);
+stat_t sp_get_sps(nvObj_t* nv);
+stat_t sp_set_sps(nvObj_t* nv);
+
+stat_t pwm_get_p1frq(nvObj_t *nv);
+stat_t pwm_set_p1frq(nvObj_t *nv);
+stat_t pwm_get_p1csl(nvObj_t *nv);
+stat_t pwm_set_p1csl(nvObj_t *nv);
+stat_t pwm_get_p1csh(nvObj_t *nv);
+stat_t pwm_set_p1csh(nvObj_t *nv);
+stat_t pwm_get_p1cpl(nvObj_t *nv);
+stat_t pwm_set_p1cpl(nvObj_t *nv);
+stat_t pwm_get_p1cph(nvObj_t *nv);
+stat_t pwm_set_p1cph(nvObj_t *nv);
+stat_t pwm_get_p1wsl(nvObj_t *nv);
+stat_t pwm_set_p1wsl(nvObj_t *nv);
+stat_t pwm_get_p1wsh(nvObj_t *nv);
+stat_t pwm_set_p1wsh(nvObj_t *nv);
+stat_t pwm_get_p1wpl(nvObj_t *nv);
+stat_t pwm_set_p1wpl(nvObj_t *nv);
+stat_t pwm_get_p1wph(nvObj_t *nv);
+stat_t pwm_set_p1wph(nvObj_t *nv);
+stat_t pwm_get_p1pof(nvObj_t *nv);
+stat_t pwm_set_p1pof(nvObj_t *nv);
+stat_t pwm_get_p1k(nvObj_t *nv);
+stat_t pwm_set_p1k(nvObj_t *nv);
+
+/*--- text_mode support functions ---*/
+
+#ifdef __TEXT_MODE
+
+    void sp_print_spmo(nvObj_t* nv);
+    void sp_print_spep(nvObj_t* nv);
+    void sp_print_spdp(nvObj_t* nv);
+    void sp_print_spph(nvObj_t* nv);
+    void sp_print_spde(nvObj_t* nv);
+//    void sp_print_spdn(nvObj_t* nv);
+    void sp_print_spsn(nvObj_t* nv);
+    void sp_print_spsm(nvObj_t* nv);
+    void sp_print_spoe(nvObj_t* nv);
+    void sp_print_spo(nvObj_t* nv);
+    void sp_print_spc(nvObj_t* nv);
+    void sp_print_sps(nvObj_t* nv);
+
+#else
+
+    #define sp_print_spmo tx_print_stub
+    #define sp_print_spep tx_print_stub
+    #define sp_print_spdp tx_print_stub
+    #define sp_print_spph tx_print_stub
+    #define sp_print_spde tx_print_stub
+//    #define sp_print_spdn tx_print_stub
+    #define sp_print_spsn tx_print_stub
+    #define sp_print_spsm tx_print_stub
+    #define sp_print_spoe tx_print_stub
+    #define sp_print_spo tx_print_stub
+    #define sp_print_spc tx_print_stub
+    #define sp_print_sps tx_print_stub
+
+#endif  // __TEXT_MODE
+
+#ifdef __TEXT_MODE
+
+    void pwm_print_p1frq(nvObj_t *nv);
+    void pwm_print_p1csl(nvObj_t *nv);
+    void pwm_print_p1csh(nvObj_t *nv);
+    void pwm_print_p1cpl(nvObj_t *nv);
+    void pwm_print_p1cph(nvObj_t *nv);
+    void pwm_print_p1wsl(nvObj_t *nv);
+    void pwm_print_p1wsh(nvObj_t *nv);
+    void pwm_print_p1wpl(nvObj_t *nv);
+    void pwm_print_p1wph(nvObj_t *nv);
+    void pwm_print_p1pof(nvObj_t *nv);
+    void pwm_print_p1k(nvObj_t *nv);
+
+#else
+
+    #define pwm_print_p1frq tx_print_stub
+    #define pwm_print_p1csl tx_print_stub
+    #define pwm_print_p1csh tx_print_stub
+    #define pwm_print_p1cpl tx_print_stub
+    #define pwm_print_p1cph tx_print_stub
+    #define pwm_print_p1wsl tx_print_stub
+    #define pwm_print_p1wsh tx_print_stub
+    #define pwm_print_p1wpl tx_print_stub
+    #define pwm_print_p1wph tx_print_stub
+    #define pwm_print_p1pof tx_print_stub
+    #define pwm_print_p1k tx_print_stub
+
+#endif // __TEXT_MODE
 #endif  // End of include guard: SPINDLE_H_ONCE

@@ -30,10 +30,7 @@
  */
 
 #include "config.h"
-#include "settings.h"
 #include "error.h"
-
-#include "MotateUtilities.h" // for HOT_FUNC and HOT_DATA
 
 #ifndef HARDWARE_H_ONCE
 #define HARDWARE_H_ONCE
@@ -47,27 +44,15 @@
 // These must be defines (not enums) so expressions like this:
 //  #if (MOTORS >= 6)  will work
 
-#ifndef HAS_LASER
-#define HAS_LASER 0
-#endif
-
-#ifndef HAS_PRESSURE
-#define HAS_PRESSURE 0
-#endif
-
-#if HAS_LASER
-#define MOTORS 5                    // number of motors + one "laser" motor (used for pulsing the laser in sync)
-#else
 #define MOTORS 4                    // number of motors supported the hardware
-#endif
 #define PWMS 2                      // number of PWM channels supported the hardware
-#define AXES 6                      // axes to support -- must be 6 or 9
 
 /*************************
  * Global System Defines *
  *************************/
 
 #define MILLISECONDS_PER_TICK 1     // MS for system tick (systick * N)
+#define SYS_ID_DIGITS 16            // actual digits in system ID (up to 16)
 #define SYS_ID_LEN 40               // total length including dashes and NUL
 
 /*************************
@@ -76,7 +61,6 @@
 
 #include "MotatePins.h"
 #include "MotateTimers.h"           // for TimerChanel<> and related...
-#include "MotateUtilities.h"           // for TimerChanel<> and related...
 
 using Motate::TimerChannel;
 
@@ -116,29 +100,26 @@ using Motate::OutputPin;
 
 /**** Stepper DDA and dwell timer settings ****/
 
-#define FREQUENCY_DDA       100000UL        // Hz step frequency. Interrupts actually fire at 2x (200 KHz)
-#define FREQUENCY_DWELL     1000UL
-#define MIN_SEGMENT_MS ((float)1.0)
-
-#define PLANNER_QUEUE_SIZE (48)
-#define SECONDARY_QUEUE_SIZE (10)
+//#define FREQUENCY_DDA		200000UL		// Hz step frequency. Interrupts actually fire at 2x (400 KHz)
+#define FREQUENCY_DDA		150000UL		// Hz step frequency. Interrupts actually fire at 2x (300 KHz)
+#define FREQUENCY_DWELL		1000UL
 
 /**** Motate Definitions ****/
 
 // Timer definitions. See stepper.h and other headers for setup
-typedef TimerChannel<3,0> dda_timer_type;       // stepper pulse generation in stepper.cpp
-typedef TimerChannel<4,0> exec_timer_type;      // request exec timer in stepper.cpp
-typedef TimerChannel<5,0> fwd_plan_timer_type;  // request exec timer in stepper.cpp
-
-/**** SPI Setup ****/
-#include "MotateSPI.h"
-typedef Motate::SPIBus<Motate::kSPI_MISOPinNumber, Motate::kSPI_MOSIPinNumber, Motate::kSPI_SCKPinNumber> SPIBus_used_t;
-extern SPIBus_used_t spiBus;
+typedef TimerChannel<3,0> dda_timer_type;	// stepper pulse generation in stepper.cpp
+typedef TimerChannel<4,0> exec_timer_type;	// request exec timer in stepper.cpp
+typedef TimerChannel<5,0> fwd_plan_timer_type;	// request exec timer in stepper.cpp
 
 // Pin assignments
 
 pin_number indicator_led_pin_num = Motate::kLED_USBRXPinNumber;
 static PWMOutputPin<indicator_led_pin_num> IndicatorLed;
+
+// Init these to input to keep them high-z
+static Pin<Motate::kSPI0_MISOPinNumber> spi_miso_pin(Motate::kInput);
+static Pin<Motate::kSPI0_MOSIPinNumber> spi_mosi_pin(Motate::kInput);
+static Pin<Motate::kSPI0_SCKPinNumber>  spi_sck_pin(Motate::kInput);
 
 /**** Motate Global Pin Allocations ****/
 
@@ -155,6 +136,13 @@ static OutputPin<Motate::kGRBL_FeedHoldPinNumber> grbl_feedhold_pin;
 static OutputPin<Motate::kGRBL_CycleStartPinNumber> grbl_cycle_start_pin;
 
 static OutputPin<Motate::kGRBL_CommonEnablePinNumber> motor_common_enable_pin;
+static OutputPin<Motate::kSpindle_EnablePinNumber> spindle_enable_pin;
+static OutputPin<Motate::kSpindle_DirPinNumber> spindle_dir_pin;
+
+// NOTE: In the v9 and the Due the flood and mist coolants are mapped to a the same pin
+//static OutputPin<kCoolant_EnablePinNumber> coolant_enable_pin;
+static OutputPin<Motate::kCoolant_EnablePinNumber> flood_enable_pin;
+static OutputPin<Motate::kCoolant_EnablePinNumber> mist_enable_pin;
 
 // Input pins are defined in gpio.cpp
 
@@ -162,10 +150,8 @@ static OutputPin<Motate::kGRBL_CommonEnablePinNumber> motor_common_enable_pin;
  * Function Prototypes (Common) *
  ********************************/
 
-const configSubtable *const getSysConfig_3();
-
-void hardware_init(void);       // master hardware init
-stat_t hardware_periodic();     // callback from the main loop (time sensitive)
+void hardware_init(void);			// master hardware init
+stat_t hardware_periodic();  // callback from the main loop (time sensitive)
 void hw_hard_reset(void);
 stat_t hw_flash(nvObj_t *nv);
 

@@ -29,7 +29,6 @@
 #define KINEMATICS_H_ONCE
 
 #include "util.h"
-#include "gcode.h" // for GCodeState_t
 
 /* Generic Functions
  *
@@ -43,16 +42,14 @@
 template <uint8_t axes, uint8_t motors>
 struct KinematicsBase {
     // configure each joint (steps-per-unit, joint mapping)
-    virtual void configure(const float steps_per_unit[motors], const int8_t motor_map[motors]);
+    virtual void configure(const float steps_per_unit[motors], const int8_t motor_map[]);
 
     // take the target (in cartesian coordinates in mm), and convert them to steps for each joints
     // taking the joint_map into consideration, and returning the values in the provided array steps[]
     // must be as fast as possible while retaining precision
     // the other information is for the sake of tracking and intelligent error correction
     // the derivatives (acceleration, jerk) or other considerations
-    // the gcode model is passed in for additional context, and may be ignored
-    // the target is in the gcode model, but may be modified, so it's passed separately
-    virtual void inverse_kinematics(const GCodeState_t &gm, const float target[axes], const float position[axes], const float start_velocity, const float end_velocity, const float segment_time, float steps[motors]) {
+    virtual void inverse_kinematics(const float target[axes], const float position[axes], const float start_velocity, const float end_velocity, const float segment_time, float steps[motors]) {
     }
 
     // if the planner buffer is empty, the idel_task will be given the opportunity to drive the runtime
@@ -75,18 +72,6 @@ struct KinematicsBase {
 
     // sync any external sensors with the current step position
     virtual void sync_encoders(const float step_position[motors], const float position[axes]);
-
-    // homing support - since kinematics is between the stepper and the gcode, we put this here
-
-    // how many moves will this axis need to home? normal is 1, but if it has two motors on it it may need 3 (see cartesian override)
-    virtual uint8_t axis_homing_moves(uint8_t axis) { return 1; }
-
-    // set which of the axis moves will be homed next - may freeze motors or change the kinematics output somehow
-    // if move > axis_homing_moves(axis) then it clears homing for that axis
-    virtual void axis_set_homing_move(uint8_t axis, uint8_t move) { /* nothing to do */ }
-
-    // called to give the opportunity to clean up after any homing setups
-    virtual void set_homing_done() { /* nothing to do here */ }
 };
 
 extern KinematicsBase<AXES, MOTORS> *kn;
@@ -109,55 +94,6 @@ stat_t kn_get_pos_b(nvObj_t *nv);
 stat_t kn_get_pos_c(nvObj_t *nv);
 stat_t kn_get_pos_d(nvObj_t *nv);
 #endif
-#if KINEMATICS==KINE_PRESSURE
-// force
-stat_t kn_get_force(nvObj_t *nv);
-stat_t kn_set_force(nvObj_t *nv);
-
-stat_t kn_get_target(nvObj_t *nv);
-stat_t kn_set_target(nvObj_t *nv);
-
-stat_t kn_get_epm(nvObj_t *nv);
-stat_t kn_set_epm(nvObj_t *nv);
-
-stat_t kn_get_hold_time(nvObj_t *nv);
-stat_t kn_set_hold_time(nvObj_t *nv);
-
-stat_t kn_get_hold_ratio(nvObj_t *nv);
-stat_t kn_set_hold_ratio(nvObj_t *nv);
-
-stat_t kn_get_e_value(nvObj_t *nv);
-stat_t kn_get_i_value(nvObj_t *nv);
-stat_t kn_get_d_value(nvObj_t *nv);
-
-stat_t kn_get_uoc_value(nvObj_t *nv);
-stat_t kn_get_umc_value(nvObj_t *nv);
-stat_t kn_get_ec_value(nvObj_t *nv);
-
-stat_t kn_get_p_factor(nvObj_t *nv);
-stat_t kn_set_p_factor(nvObj_t *nv);
-stat_t kn_get_i_factor(nvObj_t *nv);
-stat_t kn_set_i_factor(nvObj_t *nv);
-stat_t kn_get_d_factor(nvObj_t *nv);
-stat_t kn_set_d_factor(nvObj_t *nv);
-
-// anchored
-stat_t kn_get_anchored(nvObj_t *nv);
-stat_t kn_set_anchored(nvObj_t *nv);
-
-stat_t kn_get_backoff_pressure(nvObj_t *nv);
-stat_t kn_set_backoff_pressure(nvObj_t *nv);
-
-// joint positions
-stat_t kn_get_pos_1(nvObj_t *nv);
-stat_t kn_get_pos_2(nvObj_t *nv);
-stat_t kn_get_pos_3(nvObj_t *nv);
-stat_t kn_get_pos_4(nvObj_t *nv);
-stat_t kn_get_pos_5(nvObj_t *nv);
-
-stat_t get_flow_volume(nvObj_t *nv);
-
-#endif // KINEMATICS==KINE_PRESSURE
 
 void kn_config_changed();
 void kn_forward_kinematics(const float steps[], float travel[]);

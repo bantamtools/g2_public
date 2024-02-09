@@ -35,32 +35,18 @@
 
 //**** GLOBAL / GENERAL SETTINGS ******************************************************
 
-#define MIST_ENABLE_OUTPUT_NUMBER 0
-#define FLOOD_ENABLE_OUTPUT_NUMBER 0
-
-// #define SPINDLE_ENABLE_OUTPUT_NUMBER 4
-// #define SPINDLE_DIRECTION_OUTPUT_NUMBER 5
-// #define SPINDLE_PWM_NUMBER 6
-
-#define SPINDLE_ENABLE_OUTPUT_NUMBER 1
-#define SPINDLE_DIRECTION_OUTPUT_NUMBER 2
-#define SPINDLE_PWM_NUMBER 3
-
-// #define FEEDHOLD_Z_LIFT 3  // mm to lift Z on feedhold
-
-
 #define JUNCTION_INTEGRATION_TIME   0.1     // cornering - between 0.10 and 2.00 (higher is faster)
 #define CHORDAL_TOLERANCE           0.01    // chordal accuracy for arc drawing (in mm)
 
 #define SOFT_LIMIT_ENABLE           0       // 0=off, 1=on
-#define HARD_LIMIT_ENABLE           1       // 0=off, 1=on
+#define HARD_LIMIT_ENABLE           0       // 0=off, 1=on
 #define SAFETY_INTERLOCK_ENABLE     1       // 0=off, 1=on
 
 #define SPINDLE_ENABLE_POLARITY     1       // 0=active low, 1=active high
 #define SPINDLE_DIR_POLARITY        0       // 0=clockwise is low, 1=clockwise is high
 #define SPINDLE_PAUSE_ON_HOLD       true
-#define SPINDLE_SPINUP_DELAY        0.1     // after unpausing and turning the spindle on, dwell for 1.5s
-#define SPINDLE_SPEED_CHANGE_PER_MS 7.0     // external non-speed-controlled spindle, but we can use this as a built-in delay
+#define SPINDLE_SPINUP_DELAY        1.5     // after unpausing and turning the spindle on, dwell for 1.5s
+#define SPINDLE_SPEED_CHANGE_PER_MS 7.0
 
 #define ESC_BOOT_TIME               5000    // how long the ESC takes to boot, in milliseconds
 #define ESC_LOCKOUT_TIME            900     // how long the interlock needs to be engaged before killing power... actually 1s, but be conservative
@@ -81,7 +67,7 @@
 #define INTERLOCK_SWITCH_INPUT          4   // DI4
 #define ESTOP_SWITCH_INPUT              2   // DI2
 #undef PAUSE_DWELL_TIME
-#define PAUSE_DWELL_TIME                1.5 //after unpausing and turning the spindle on, dwell for 1.5s
+#define PAUSE_DWELL_TIME                2.5 //after unpausing and turning the spindle on, dwell for 1.5s
 
 // Communications and reporting settings
 
@@ -133,6 +119,7 @@
 #define M1_POWER_MODE               MOTOR_POWER_MODE        // 1pm  See enum cmMotorPowerMode in stepper.h
 #define M1_POWER_LEVEL              MOTOR_POWER_LEVEL_XY    // 0.00=off, 1.00=max
 #define M1_POWER_LEVEL_IDLE         MOTOR_POWER_LEVEL_XY_IDLE
+#define M1_PWM_FREQUENCY            250000                   // PWM frequency for Vref (kHz)
 
 #define M2_MOTOR_MAP                AXIS_Y_EXTERNAL
 #define M2_STEP_ANGLE               1.8
@@ -142,6 +129,7 @@
 #define M2_POWER_MODE               MOTOR_POWER_MODE
 #define M2_POWER_LEVEL              MOTOR_POWER_LEVEL_XY
 #define M2_POWER_LEVEL_IDLE         MOTOR_POWER_LEVEL_XY_IDLE
+#define M2_PWM_FREQUENCY            250000                   // PWM frequency for Vref (kHz)
 
 #define M3_MOTOR_MAP                AXIS_Z_EXTERNAL
 #if HAS_CANSTACK_Z_AXIS
@@ -156,6 +144,7 @@
 #define M3_POWER_MODE               MOTOR_POWER_MODE
 #define M3_POWER_LEVEL              MOTOR_POWER_LEVEL_Z
 #define M3_POWER_LEVEL_IDLE         MOTOR_POWER_LEVEL_Z_IDLE
+#define M3_PWM_FREQUENCY            250000                   // PWM frequency for Vref (kHz)
 
 #define M4_MOTOR_MAP                AXIS_A_EXTERNAL
 #define M4_STEP_ANGLE               1.8
@@ -165,6 +154,7 @@
 #define M4_POWER_MODE               MOTOR_DISABLED
 #define M4_POWER_LEVEL              MOTOR_POWER_LEVEL_DISABLED
 #define M4_POWER_LEVEL_IDLE         MOTOR_POWER_LEVEL_DISABLED
+#define M4_PWM_FREQUENCY            250000       
 
 #define M5_MOTOR_MAP                AXIS_B_EXTERNAL
 #define M5_STEP_ANGLE               1.8
@@ -186,8 +176,8 @@
 
 // *** axis settings **********************************************************************************
 
-#define JERK_MAX                    500                 // 500 million mm/(min^3)
-#define JERK_HIGH_SPEED             800                 // 1000 million mm/(min^3) // Jerk during homing needs to stop *fast*
+#define JERK_MAX                    650                 // 500 million mm/(min^3)
+#define JERK_HIGH_SPEED             1000                 // 1000 million mm/(min^3) // Jerk during homing needs to stop *fast*
 #define VELOCITY_MAX                1500
 #define SEARCH_VELOCITY             500
 #define LATCH_VELOCITY              25                  // reeeeally slow for accuracy
@@ -225,7 +215,7 @@
 #define Z_FEEDRATE_MAX              Z_VELOCITY_MAX
 #define Z_TRAVEL_MIN                -60.1
 #define Z_TRAVEL_MAX                0
-#define Z_JERK_MAX                  JERK_MAX
+#define Z_JERK_MAX                  400
 #define Z_JERK_HIGH_SPEED           JERK_HIGH_SPEED
 #define Z_HOMING_INPUT              6
 #define Z_HOMING_DIRECTION          1

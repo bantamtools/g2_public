@@ -1329,6 +1329,14 @@ xio_t xio = {
 #endif
 };
 
+uint64_t ticks_since_write = 0;
+// This systick event can be used for other things, but for now we only keep track of ticks since writing
+Motate::SysTickEvent xio_systick_event{
+    [] {
+        ticks_since_write++;
+    },
+    nullptr};
+
 /**** CODE ****/
 
 /*
@@ -1357,6 +1365,9 @@ void xio_init()
 #if XIO_HAS_UART == 1
     serial0Wrapper.init();
 #endif
+
+    // Setup the systick event
+    SysTickTimer.registerEvent(&xio_systick_event);
 }
 
 stat_t xio_test_assertions()
@@ -1373,6 +1384,7 @@ stat_t xio_test_assertions()
 
 size_t xio_write(const char *buffer, size_t size, bool only_to_muted /*= false*/)
 {
+    ticks_since_write = 0;
     return xio.write(buffer, size, only_to_muted);
 }
 
@@ -1437,6 +1449,15 @@ void xio_exit_fake_bootloader() {
 }
 #endif
 
+/*
+ * xio_get_ticks_since_write() - returns how many ticks (nominally milliseconds) since the last xio_write
+ */
+
+uint64_t xio_get_ticks_since_write()
+{
+    return ticks_since_write;
+}
+
 /***********************************************************************************
  * newlib-nano support functions
  * Here we wire printf to xio
@@ -1445,6 +1466,9 @@ void xio_exit_fake_bootloader() {
 int _write( int file, char *ptr, int len )
 {
     return xio_write(ptr, len);
+    // #if IN_DEBUGGER == 1
+    // Motate::debug.write(ptr, len);
+    // #endif
 }
 
 

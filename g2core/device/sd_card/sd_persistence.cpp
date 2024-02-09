@@ -74,7 +74,7 @@ uint8_t active_file_index();
 // Leaving this in for now in case bugs come up; we can remove it when we're confident
 // it's stable
 #if 0
-# define DEBUG_PRINT(...) printf(__VA_ARGS__);
+# define DEBUG_PRINT(args...) printf(args);
 #else
 # define DEBUG_PRINT(...) do {} while (0)
 #endif
@@ -147,15 +147,15 @@ stat_t SD_Persistence::read(nvObj_t *nv)
     if ((type == TYPE_INTEGER) || (type == TYPE_DATA)) {
         nv->valuetype = TYPE_INTEGER;
         nv->value_int = *(int32_t *)nvm.io_buffer;
-        DEBUG_PRINT("value (i) copied from address %l in file: %l\n", nv->index * NVM_VALUE_LEN, nv->value_int);
+        DEBUG_PRINT("value (i) copied from address %li in file: %li\n", nv->index * NVM_VALUE_LEN, nv->value_int);
     } else if (type == TYPE_BOOLEAN) {
         nv->valuetype = TYPE_BOOLEAN;
         nv->value_int = *(int32_t *)nvm.io_buffer;
-        DEBUG_PRINT("value (b) copied from address %l in file: %l\n", nv->index * NVM_VALUE_LEN, nv->value_int);
+        DEBUG_PRINT("value (b) copied from address %li in file: %li\n", nv->index * NVM_VALUE_LEN, nv->value_int);
     } else {
         nv->valuetype = TYPE_FLOAT;
         nv->value_flt = *(float *)nvm.io_buffer;
-        DEBUG_PRINT("value (f) copied from address %l in file: %f\n", nv->index * NVM_VALUE_LEN, nv->value_flt);
+        DEBUG_PRINT("value (f) copied from address %li in file: %f\n", nv->index * NVM_VALUE_LEN, nv->value_flt);
     }
 
     return (STAT_OK);
@@ -364,12 +364,16 @@ stat_t write_persistent_values()
           // Write out based on the value type
           if (nv->valuetype == TYPE_INTEGER || nv->valuetype == TYPE_BOOLEAN || nv->valuetype == TYPE_DATA) {
             memcpy(nvm.io_buffer + index, &nv->value_int, NVM_VALUE_LEN);
-            DEBUG_PRINT("item index: %l , write index: %l (cnt: %l), value: %i\n", nv->index, index, cnt, nv->value_int);
+            DEBUG_PRINT("item index: %li , write index: %li (cnt: %li), value: %li\n", nv->index, index, cnt,
+                        nv->value_int);
           } else if (nv->valuetype == TYPE_FLOAT) {
-            memcpy(nvm.io_buffer + index, &nv->value_flt, NVM_VALUE_LEN);
-            DEBUG_PRINT("item index: %l , write index: %l (cnt: %l), value: %f\n", nv->index, index, cnt, nv->value_flt);
+              // value_flt is actually a DOUBLE, which is 8 bytes long.
+              float value_flt = nv->value_flt;
+              memcpy(nvm.io_buffer + index, &value_flt, NVM_VALUE_LEN);
+              DEBUG_PRINT("item index: %li , write index: %li (cnt: %li), value: %f\n", nv->index, index, cnt,
+                          nv->value_flt);
           } else {
-            // next - ignore strings and other stuff which shouldn't be set to persist anyway
+              // next - ignore strings and other stuff which shouldn't be set to persist anyway
           }
         }
       }

@@ -730,7 +730,7 @@ static stat_t _parse_gcode_block(char *buf, char *active_comment)
                     }
                     break;
                 }
-                case 49: SET_NON_MODAL (next_action, NEXT_ACTION_CANCEL_TL_OFFSET);
+				case 49: SET_NON_MODAL (next_action, NEXT_ACTION_CANCEL_TL_OFFSET);
                 case 53: SET_NON_MODAL (absolute_override, ABSOLUTE_OVERRIDE_ON_DISPLAY_WITH_NO_OFFSETS);
                 case 54: SET_MODAL (MODAL_GROUP_G12, coord_system, G54);
                 case 55: SET_MODAL (MODAL_GROUP_G12, coord_system, G55);
@@ -958,7 +958,7 @@ stat_t _execute_gcode_block(char *active_comment)
         ritorno(cm_check_linenum());
     }
 
-    EXEC_FUNC(spindle_set_speed, S_word);                  // S
+    EXEC_FUNC(spindle_set_speed, S_word);                   // S
     EXEC_FUNC(cm_select_tool, tool_select);                 // T - tool_select is where it's written
     EXEC_FUNC(cm_change_tool, tool_change);                 // M6 - is where it's effected
 

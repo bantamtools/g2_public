@@ -99,7 +99,7 @@ struct StepDirStepper final : Stepper  {
 
    public:
     // sets default pwm freq for all motor vrefs (commented line below also sets HiZ)
-    StepDirStepper(ioPolarity step_polarity, ioPolarity enable_polarity, const uint32_t frequency = 250000) :
+    StepDirStepper(ioPolarity step_polarity, ioPolarity enable_polarity, const uint32_t frequency = 10000) :
         Stepper{},
         _step{step_polarity==IO_ACTIVE_LOW?kStartHigh:kStartLow},
         _enable{enable_polarity==IO_ACTIVE_LOW?kStartHigh:kStartLow},

@@ -65,9 +65,6 @@ void cm_print_estp(nvObj_t *nv) { text_print_str(nv, fmt_estp);}
 #define msg_safe NULL
 #define msg_estp NULL
 
-#define cm_print_safe tx_print_stub
-#define cm_print_estp tx_print_stub
-
 #endif // __TEXT_MODE
 
 stat_t cm_ack_estop(nvObj_t *nv)
@@ -94,10 +91,10 @@ stat_t cm_get_safe(nvObj_t *nv) {
 }
 stat_t cm_get_estp(nvObj_t *nv) { return (_bt_get_msg_helper(nv, msg_estp, bsm ? (bsm->get_estop_state() & 0x3) : 0)); }
 
-constexpr cfgItem_t sys_config_items_3[] = {
-    {"", "safe", _i0, 0, cm_print_safe, cm_get_safe, set_ro, nullptr, 0},          // interlock status
-    {"", "estp", _i0, 0, cm_print_estp, cm_get_estp, cm_ack_estop, nullptr, 0},    // E-stop status (SET to ack)
-    {"", "estpc", _i0, 0, cm_print_estp, cm_ack_estop, cm_ack_estop, nullptr, 0},  // E-stop status clear (GET to ack)
-};
-constexpr cfgSubtableFromStaticArray sys_config_3{sys_config_items_3};
-const configSubtable * const getSysConfig_3() { return &sys_config_3; }
+// constexpr cfgItem_t sys_config_items_3[] = {
+//     {"", "safe", _i0, 0, cm_print_safe, cm_get_safe, set_ro, nullptr, 0},          // interlock status
+//     {"", "estp", _i0, 0, cm_print_estp, cm_get_estp, cm_ack_estop, nullptr, 0},    // E-stop status (SET to ack)
+//     {"", "estpc", _i0, 0, cm_print_estp, cm_ack_estop, cm_ack_estop, nullptr, 0},  // E-stop status clear (GET to ack)
+// };
+// constexpr cfgSubtableFromStaticArray sys_config_3{sys_config_items_3};
+// const configSubtable * const getSysConfig_3() { return &sys_config_3; }

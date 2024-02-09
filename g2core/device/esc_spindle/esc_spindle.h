@@ -74,11 +74,20 @@ class ESCSpindle : public ToolHead {
         float phase_lo;              // pwm phase at minimum spindle speed, clamped [0..1]
         float phase_hi;              // pwm phase at maximum spindle speed, clamped [0..1]
 
+        float k_value;                  // pwm k value to control curve slope
+
         // convert a speed value in the range of (speed_lo .. speed_hi)
         // to a value in the range of (phase_lo .. phase_hi)
         float speed_to_phase(float speed) {
+            
+            // Clamp speed to the [speed_lo, speed_hi] range
             speed = (std::max(speed_lo, std::min(speed_hi, speed)) - speed_lo) / (speed_hi - speed_lo);
-            return (speed * (phase_hi - phase_lo)) + phase_lo;
+
+            // Apply a power curve that weights towards phase_low
+            // The exponent (k > 1) determines the curvature
+            float curved_speed = std::pow(speed, k_value);
+
+            return (curved_speed * (phase_hi - phase_lo)) + phase_lo;
         }
     };
 
@@ -227,6 +236,9 @@ class ESCSpindle : public ToolHead {
 
     void set_phase_off(float new_phase_off) override { phase_off = new_phase_off; }
     float get_phase_off() override { return phase_off; }
+
+    void set_k_value(float new_k_value) override { cw.k_value = new_k_value; ccw.k_value = new_k_value; }
+    float get_k_value() override { return cw.k_value; }
 };
 
 // method implementations follow

@@ -99,7 +99,7 @@ stat_t cm_jogging_cycle_start(uint8_t axis) {
     cm_set_feed_rate_mode(UNITS_PER_MINUTE_MODE);
 
     jog.velocity_start = JOGGING_START_VELOCITY;  // see canonical_machine.h for #define
-    jog.velocity_max = cm->a[axis].velocity_max;
+    jog.velocity_max = 2000;//cm->a[axis].velocity_max;
 
     jog.start_pos = cm_get_absolute_position(RUNTIME, axis);
     jog.dest_pos = cm_get_jogging_dest();

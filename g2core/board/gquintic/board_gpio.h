@@ -29,7 +29,7 @@
 #define BOARD_GPIO_H_ONCE
 
 // this file is included from the bottom of gpio.h, but we do this for completeness
-#include "gpio.h"
+#include "../../gpio.h"
 #include "hardware.h"
 
 /*
@@ -52,7 +52,7 @@ using Motate::ADCDifferentialPair;
 template<bool can_pwm, Motate::pin_number... V>
 using OutputType = typename std::conditional<can_pwm, PWMOutputPin<V...>, PWMLikeOutputPin<V...>>::type;
 
-#define D_IN_CHANNELS       10          // number of digital inputs supported
+#define D_IN_CHANNELS       9           // number of digital inputs supported
 
 extern gpioDigitalInputPin<IRQPin<Motate::kInput1_PinNumber>>  din1;
 extern gpioDigitalInputPin<IRQPin<Motate::kInput2_PinNumber>>  din2;
@@ -63,7 +63,7 @@ extern gpioDigitalInputPin<IRQPin<Motate::kInput6_PinNumber>>  din6;
 extern gpioDigitalInputPin<IRQPin<Motate::kInput7_PinNumber>>  din7;
 extern gpioDigitalInputPin<IRQPin<Motate::kInput8_PinNumber>>  din8;
 extern gpioDigitalInputPin<IRQPin<Motate::kInput9_PinNumber>>  din9;
-extern gpioDigitalInputPin<IRQPin<Motate::kInput10_PinNumber>> din10;
+// extern gpioDigitalInputPin<IRQPin<Motate::kInput10_PinNumber>> din10;
 // extern gpioDigitalInputPin<IRQPin<Motate::kInput11_PinNumber>> din11;
 // extern gpioDigitalInputPin<IRQPin<Motate::kInput12_PinNumber>> din12;
 
@@ -194,15 +194,4 @@ extern gpioAnalogInputPin<ADCPin<Motate::kADC4_PinNumber>> ai4;
 
 extern gpioAnalogInput*    const a_in[A_IN_CHANNELS];
 
-#if HAS_PRESSURE
-// #include "bme280.h"
-// extern BME280<SPIBus_used_t::SPIBusDevice> pressure_sensor1;
-
-#include "honeywell-trustability-ssc.h"
-// extern HoneywellTruStability<SPIBus_used_t::SPIBusDevice> pressure_sensor1;
-extern HoneywellTruStability<TWIBus_used_t::TWIBusDevice> pressure_sensor1;
-extern HoneywellTruStability<TWIBus_used_t::TWIBusDevice> flow_pressure_sensor1; // pressure sensor, used for flow measurement
-
-extern VenturiFlowSensor flow_sensor1;
-#endif // HAS_PRESSURE
 #endif // End of include guard: BOARD_GPIO_H_ONCE

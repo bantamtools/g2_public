@@ -50,6 +50,11 @@
 #include "kinematics.h"
 #include "safety_manager.h"
 
+#ifdef BANTAM
+// This is to grab the functions used from here for config
+#include "bantam_safety_manager.h"
+#endif
+
 /*** structures ***/
 
 cfgParameters_t cfg;         // application specific configuration parameters
@@ -104,117 +109,8 @@ static stat_t get_tick(nvObj_t *nv);        // get system tick count
  *    and convert_outgoing_float(). Apply conversion flags to all axes, not just linear,
  *    as rotary axes may be treated as linear if in radius mode, so the flag is needed.
  */
+const cfgItem_t cfgArray[] = {
 
-class configSubtableNode {
-    const configSubtable * const subtable;
-   public:
-    const configSubtableNode * const next;
-
-    configSubtableNode(size_t new_start_idx, const configSubtable *const s)
-        : subtable{s}, next{nullptr}, start_idx(new_start_idx), end_idx(new_start_idx+subtable->length), length{subtable->length} {};
-
-    configSubtableNode(size_t new_start_idx, const configSubtable *const s, const configSubtableNode *const n)
-        : subtable{s}, next{n}, start_idx(new_start_idx), end_idx(new_start_idx+subtable->length), length(subtable->length + next->length) {};
-
-    // The following is to optimize for linear table searches
-    static const configSubtableNode *search_node_cache; // keep track of the last place we were searching
-    static std::size_t idx_cache;                       // and the last index we were searching for
-    static std::size_t idx_cache_offset;                // and how much we had to remove from it for this search node
-
-    const size_t start_idx;
-    const size_t end_idx;
-    const size_t length;
-
-    const cfgItem_t * const get(std::size_t idx) const {
-        if (!search_node_cache || idx_cache > idx) {
-            search_node_cache = this;
-        }
-
-        const configSubtableNode *search_node = search_node_cache;
-        idx_cache = idx;
-
-        while (idx >= (search_node->end_idx)) {
-            if (!search_node->next) {
-                idx_cache = 0;
-                search_node_cache = nullptr;
-                return nullptr;
-            }
-            search_node = search_node->next;
-        }
-
-        search_node_cache = search_node;
-        return search_node->subtable->get(idx - search_node->start_idx);
-    }
-
-    // const cfgItem_t * const get(std::size_t idx) const {
-    //     const configSubtableNode *search_node = this;
-    //     while (idx >= search_node->subtable->length()) {
-    //         if (!search_node->next) {
-    //             return nullptr;
-    //         }
-    //         idx -= search_node->subtable->length();
-    //         search_node = search_node->next;
-    //     }
-    //     return search_node->subtable->get(idx);
-    // }
-
-    index_t find(const char *token) {
-        const configSubtableNode *search_node = this;
-        index_t idx = 0;
-        idx_cache_offset = 0;
-
-        while ((idx = search_node->subtable->find(token)) == NO_MATCH) {
-            if (!search_node->next) {
-                idx_cache = 0;
-                search_node_cache = nullptr;
-                return NO_MATCH;
-            }
-            auto l = search_node->subtable->length;
-            idx_cache_offset += l;
-            search_node = search_node->next;
-        }
-
-        search_node_cache = search_node;
-        idx_cache = idx + idx_cache_offset;
-
-        return idx_cache;
-    }
-};
-
-const configSubtableNode *configSubtableNode::search_node_cache = nullptr; // keep track of the last place we were searching
-std::size_t configSubtableNode::idx_cache = 0;                             // and the last index we were searching for
-std::size_t configSubtableNode::idx_cache_offset = 0;                      // and how much we had to remove from it for this search node
-
-// make a compile-time linked list of subtables
-template <typename... following_nodes_t>
-class configSubtableNodes;
-
-template <typename... following_nodes_t>
-class configSubtableNodes<const configSubtable *, following_nodes_t...> {
-    configSubtableNodes<following_nodes_t...> next_nodes;
-public:
-    configSubtableNode this_node;
-    constexpr configSubtableNodes(const size_t start_index, const configSubtable * this_subtable, following_nodes_t... following_nodes) :
-    next_nodes{start_index + this_subtable->length, following_nodes...}, this_node{start_index, this_subtable, &next_nodes.this_node}
-    {}
-};
-
-template <>
-class configSubtableNodes<const configSubtable * > {
-public:
-    configSubtableNode this_node;
-
-    configSubtableNodes(const size_t start_index, const configSubtable * this_subtable) :
-    this_node{start_index, this_subtable}
-    {}
-};
-
-template <typename... following_nodes_t>
-constexpr configSubtableNodes<following_nodes_t...> makeSubtableNodes(const size_t start_index, following_nodes_t... following_nodes) {
-    return {start_index, following_nodes...};
-}
-
-constexpr cfgItem_t sys_config_items_1[] = {
     // group token flags p, print_func,   get_func,   set_func, get/set target,    default value
     { "sys", "fb", _fn,  2, hw_print_fb,  hw_get_fb,  set_ro, nullptr, 0 },   // MUST BE FIRST for persistence checking!
     { "sys", "fv", _fn,  2, hw_print_fv,  hw_get_fv,  set_ro, nullptr, 0 },
@@ -223,19 +119,102 @@ constexpr cfgItem_t sys_config_items_1[] = {
     { "sys", "hp", _sn,  0, hw_print_hp,  hw_get_hp,  set_ro, nullptr, 0 },
     { "sys", "hv", _sn,  0, hw_print_hv,  hw_get_hv,  set_ro, nullptr, 0 },
     { "sys", "id", _sn,  0, hw_print_id,  hw_get_id,  set_ro, nullptr, 0 },   // device ID (ASCII signature)
-};
-constexpr cfgSubtableFromStaticArray sys_config_1 {sys_config_items_1};
-constexpr const configSubtable * const getSysConfig_1() { return &sys_config_1; }
 
-// cm config 1
-// mpo config 1
-// pos config 1
-// ofs config 1
-// homine config 1
-// probing config 1
-// joggin cofig 1
+    // dynamic model attributes for reporting purposes (up front for speed)
+    { "", "stat", _i0, 0, cm_print_stat, cm_get_stat,  set_ro,       nullptr, 0 },    // combined machine state
+    { "","stat2", _i0, 0, cm_print_stat, cm_get_stat2, set_ro,       nullptr, 0 },    // combined machine state
+    { "", "n",    _ii, 0, cm_print_line, cm_get_mline, set_noop,     nullptr, 0 },    // Model line number
+    { "", "line", _ii, 0, cm_print_line, cm_get_line,  set_ro,       nullptr, 0 },    // Active line number - model or runtime line number
+    { "", "vel",  _f0, 2, cm_print_vel,  cm_get_vel,   set_ro,       nullptr, 0 },    // current velocity
+    { "", "feed", _f0, 2, cm_print_feed, cm_get_feed,  set_ro,       nullptr, 0 },    // feed rate
+    { "", "macs", _i0, 0, cm_print_macs, cm_get_macs,  set_ro,       nullptr, 0 },    // raw machine state
+    { "", "cycs", _i0, 0, cm_print_cycs, cm_get_cycs,  set_ro,       nullptr, 0 },    // cycle state
+    { "", "mots", _i0, 0, cm_print_mots, cm_get_mots,  set_ro,       nullptr, 0 },    // motion state
+    { "", "hold", _i0, 0, cm_print_hold, cm_get_hold,  set_ro,       nullptr, 0 },    // feedhold state
+    { "", "unit", _i0, 0, cm_print_unit, cm_get_unit,  set_ro,       nullptr, 0 },    // units mode
+    { "", "coor", _i0, 0, cm_print_coor, cm_get_coor,  set_ro,       nullptr, 0 },    // coordinate system
+    { "", "momo", _i0, 0, cm_print_momo, cm_get_momo,  set_ro,       nullptr, 0 },    // motion mode
+    { "", "plan", _i0, 0, cm_print_plan, cm_get_plan,  set_ro,       nullptr, 0 },    // plane select
+    { "", "path", _i0, 0, cm_print_path, cm_get_path,  set_ro,       nullptr, 0 },    // path control mode
+    { "", "dist", _i0, 0, cm_print_dist, cm_get_dist,  set_ro,       nullptr, 0 },    // distance mode
+    { "", "admo", _i0, 0, cm_print_admo, cm_get_admo,  set_ro,       nullptr, 0 },    // arc distance mode
+    { "", "frmo", _i0, 0, cm_print_frmo, cm_get_frmo,  set_ro,       nullptr, 0 },    // feed rate mode
+    { "", "tool", _i0, 0, cm_print_tool, cm_get_toolv, set_ro,       nullptr, 0 },    // active tool
+#ifdef BANTAM
+    { "", "safe", _i0, 0, cm_print_safe, cm_get_safe,  set_ro,       nullptr, 0 },    // interlock status
+    { "", "estp", _i0, 0, cm_print_estp, cm_get_estp,  cm_ack_estop, nullptr, 0 },    // E-stop status (SET to ack)
+    { "", "estpc",_i0, 0, cm_print_estp, cm_ack_estop, cm_ack_estop, nullptr, 0 },  // E-stop status clear (GET to ack)
+#endif
+    { "", "g92e", _i0, 0, cm_print_g92e, cm_get_g92e,  set_ro,       nullptr, 0 },    // G92 enable state
+#ifdef TEMPORARY_HAS_LEDS
+    { "", "_leds",_i0, 0, tx_print_nul, _get_leds,_set_leds, nullptr, 0 },    // TEMPORARY - change LEDs
+#endif
 
-constexpr cfgItem_t pwr_config_items_1[] = {
+    { "mpo","mpox",_f0, 5, cm_print_mpo, cm_get_mpo, set_ro, nullptr, 0 },    // X machine position
+    { "mpo","mpoy",_f0, 5, cm_print_mpo, cm_get_mpo, set_ro, nullptr, 0 },    // Y machine position
+    { "mpo","mpoz",_f0, 5, cm_print_mpo, cm_get_mpo, set_ro, nullptr, 0 },    // Z machine position
+    { "mpo","mpou",_f0, 5, cm_print_mpo, cm_get_mpo, set_ro, nullptr, 0 },    // U machine position
+    { "mpo","mpov",_f0, 5, cm_print_mpo, cm_get_mpo, set_ro, nullptr, 0 },    // V machine position
+    { "mpo","mpow",_f0, 5, cm_print_mpo, cm_get_mpo, set_ro, nullptr, 0 },    // W machine position
+    { "mpo","mpoa",_f0, 5, cm_print_mpo, cm_get_mpo, set_ro, nullptr, 0 },    // A machine position
+    { "mpo","mpob",_f0, 5, cm_print_mpo, cm_get_mpo, set_ro, nullptr, 0 },    // B machine position
+    { "mpo","mpoc",_f0, 5, cm_print_mpo, cm_get_mpo, set_ro, nullptr, 0 },    // C machine position
+
+    { "pos","posx",_f0, 5, cm_print_pos, cm_get_pos, set_ro, nullptr, 0 },    // X work position
+    { "pos","posy",_f0, 5, cm_print_pos, cm_get_pos, set_ro, nullptr, 0 },    // Y work position
+    { "pos","posz",_f0, 5, cm_print_pos, cm_get_pos, set_ro, nullptr, 0 },    // Z work position
+    { "pos","posu",_f0, 5, cm_print_pos, cm_get_pos, set_ro, nullptr, 0 },    // U work position
+    { "pos","posv",_f0, 5, cm_print_pos, cm_get_pos, set_ro, nullptr, 0 },    // V work position
+    { "pos","posw",_f0, 5, cm_print_pos, cm_get_pos, set_ro, nullptr, 0 },    // W work position
+    { "pos","posa",_f0, 5, cm_print_pos, cm_get_pos, set_ro, nullptr, 0 },    // A work position
+    { "pos","posb",_f0, 5, cm_print_pos, cm_get_pos, set_ro, nullptr, 0 },    // B work position
+    { "pos","posc",_f0, 5, cm_print_pos, cm_get_pos, set_ro, nullptr, 0 },    // C work position
+
+    { "ofs","ofsx",_f0, 5, cm_print_ofs, cm_get_ofs, set_ro, nullptr, 0 },    // X work offset
+    { "ofs","ofsy",_f0, 5, cm_print_ofs, cm_get_ofs, set_ro, nullptr, 0 },    // Y work offset
+    { "ofs","ofsz",_f0, 5, cm_print_ofs, cm_get_ofs, set_ro, nullptr, 0 },    // Z work offset
+    { "ofs","ofsu",_f0, 5, cm_print_ofs, cm_get_ofs, set_ro, nullptr, 0 },    // U work offset
+    { "ofs","ofsv",_f0, 5, cm_print_ofs, cm_get_ofs, set_ro, nullptr, 0 },    // V work offset
+    { "ofs","ofsw",_f0, 5, cm_print_ofs, cm_get_ofs, set_ro, nullptr, 0 },    // W work offset
+    { "ofs","ofsa",_f0, 5, cm_print_ofs, cm_get_ofs, set_ro, nullptr, 0 },    // A work offset
+    { "ofs","ofsb",_f0, 5, cm_print_ofs, cm_get_ofs, set_ro, nullptr, 0 },    // B work offset
+    { "ofs","ofsc",_f0, 5, cm_print_ofs, cm_get_ofs, set_ro, nullptr, 0 },    // C work offset
+
+    { "hom","home",_i0, 0, cm_print_home,cm_get_home,cm_set_home,nullptr,0 }, // homing state, invoke homing cycle
+    { "hom","homx",_i0, 0, cm_print_hom, cm_get_hom, set_ro, nullptr, 0 },    // X homed - Homing status group
+    { "hom","homy",_i0, 0, cm_print_hom, cm_get_hom, set_ro, nullptr, 0 },    // Y homed
+    { "hom","homz",_i0, 0, cm_print_hom, cm_get_hom, set_ro, nullptr, 0 },    // Z homed
+    { "hom","homu",_i0, 0, cm_print_hom, cm_get_hom, set_ro, nullptr, 0 },    // U homed
+    { "hom","homv",_i0, 0, cm_print_hom, cm_get_hom, set_ro, nullptr, 0 },    // V homed
+    { "hom","homw",_i0, 0, cm_print_hom, cm_get_hom, set_ro, nullptr, 0 },    // W homed
+    { "hom","homa",_i0, 0, cm_print_hom, cm_get_hom, set_ro, nullptr, 0 },    // A homed
+    { "hom","homb",_i0, 0, cm_print_hom, cm_get_hom, set_ro, nullptr, 0 },    // B homed
+    { "hom","homc",_i0, 0, cm_print_hom, cm_get_hom, set_ro, nullptr, 0 },    // C homed
+
+    { "prb","prbe",_i0, 0, tx_print_nul, cm_get_prob,set_ro, nullptr, 0 },    // probing state
+    { "prb","prbx",_f0, 5, tx_print_nul, cm_get_prb, set_ro, nullptr, 0 },    // X probe results
+    { "prb","prby",_f0, 5, tx_print_nul, cm_get_prb, set_ro, nullptr, 0 },    // Y probe results
+    { "prb","prbz",_f0, 5, tx_print_nul, cm_get_prb, set_ro, nullptr, 0 },    // Z probe results
+    { "prb","prbu",_f0, 5, tx_print_nul, cm_get_prb, set_ro, nullptr, 0 },    // U probe results
+    { "prb","prbv",_f0, 5, tx_print_nul, cm_get_prb, set_ro, nullptr, 0 },    // V probe results
+    { "prb","prbw",_f0, 5, tx_print_nul, cm_get_prb, set_ro, nullptr, 0 },    // W probe results
+    { "prb","prba",_f0, 5, tx_print_nul, cm_get_prb, set_ro, nullptr, 0 },    // A probe results
+    { "prb","prbb",_f0, 5, tx_print_nul, cm_get_prb, set_ro, nullptr, 0 },    // B probe results
+    { "prb","prbc",_f0, 5, tx_print_nul, cm_get_prb, set_ro, nullptr, 0 },    // C probe results
+    { "prb","prbs",_i0, 0, tx_print_nul, get_nul, cm_set_probe, nullptr,0 },  // store probe
+    { "prb","prbr",_bip, 0, tx_print_nul, cm_get_prbr, cm_set_prbr, nullptr, PROBE_REPORT_ENABLE },                  // enable probe report. Init in cm_init
+    { "prb","prbin",_ii, 0, tx_print_nul, cm_get_probe_input, cm_set_probe_input, nullptr, PROBING_INPUT }, // probing input
+
+    { "jog","jogx",_f0, 5, tx_print_nul, get_nul, cm_run_jog, nullptr, 0},    // jog in X axis
+    { "jog","jogy",_f0, 5, tx_print_nul, get_nul, cm_run_jog, nullptr, 0},    // jog in Y axis
+    { "jog","jogz",_f0, 5, tx_print_nul, get_nul, cm_run_jog, nullptr, 0},    // jog in Z axis
+    { "jog","jogu",_f0, 5, tx_print_nul, get_nul, cm_run_jog, nullptr, 0},    // jog in U axis
+    { "jog","jogv",_f0, 5, tx_print_nul, get_nul, cm_run_jog, nullptr, 0},    // jog in V axis
+    { "jog","jogw",_f0, 5, tx_print_nul, get_nul, cm_run_jog, nullptr, 0},    // jog in W axis
+    { "jog","joga",_f0, 5, tx_print_nul, get_nul, cm_run_jog, nullptr, 0},    // jog in A axis
+    { "jog","jogb",_f0, 5, tx_print_nul, get_nul, cm_run_jog, nullptr, 0},    // jog in B axis
+    { "jog","jogc",_f0, 5, tx_print_nul, get_nul, cm_run_jog, nullptr, 0},    // jog in C axis
+
 	{ "pwr","pwr1",_f0, 3, st_print_pwr, st_get_pwr, set_ro, nullptr, 0},	  // motor power readouts
 	{ "pwr","pwr2",_f0, 3, st_print_pwr, st_get_pwr, set_ro, nullptr, 0},
 #if (MOTORS > 2)
@@ -250,11 +229,9 @@ constexpr cfgItem_t pwr_config_items_1[] = {
 #if (MOTORS > 5)
 	{ "pwr","pwr6",_f0, 3, st_print_pwr, st_get_pwr, set_ro, nullptr, 0},
 #endif
-};
-constexpr cfgSubtableFromStaticArray pwr_config_1 {pwr_config_items_1};
-constexpr const configSubtable * const getPwrConfig_1() { return &pwr_config_1; }
 
-constexpr cfgItem_t motor_config_items_1[] = {
+
+
   // Motor parameters
   // generated with ${PROJECT_ROOT}/Resources/generate_motors_cfgArray.js
 
@@ -464,13 +441,141 @@ constexpr cfgItem_t motor_config_items_1[] = {
 #endif
 
   // END generated with ${PROJECT_ROOT}/Resources/generate_motors_cfgArray.js
-};
-constexpr cfgSubtableFromStaticArray motor_config_1 {motor_config_items_1};
-constexpr const configSubtable * const getMotorConfig_1() { return &motor_config_1; }
 
-// axis config
+    // Axis parameters
+    { "x","xam",_iip,  0, cm_print_am, cm_get_am, cm_set_am, nullptr, X_AXIS_MODE },
+    { "x","xvm",_fipc, 0, cm_print_vm, cm_get_vm, cm_set_vm, nullptr, X_VELOCITY_MAX },
+    { "x","xfr",_fipc, 0, cm_print_fr, cm_get_fr, cm_set_fr, nullptr, X_FEEDRATE_MAX },
+    { "x","xtn",_fipc, 5, cm_print_tn, cm_get_tn, cm_set_tn, nullptr, X_TRAVEL_MIN },
+    { "x","xtm",_fipc, 5, cm_print_tm, cm_get_tm, cm_set_tm, nullptr, X_TRAVEL_MAX },
+    { "x","xjm",_fipc, 0, cm_print_jm, cm_get_jm, cm_set_jm, nullptr, X_JERK_MAX },
+    { "x","xjh",_fipc, 0, cm_print_jh, cm_get_jh, cm_set_jh, nullptr, X_JERK_HIGH_SPEED },
+    { "x","xhi",_iip,  0, cm_print_hi, cm_get_hi, cm_set_hi, nullptr, X_HOMING_INPUT },
+    { "x","xhd",_iip,  0, cm_print_hd, cm_get_hd, cm_set_hd, nullptr, X_HOMING_DIRECTION },
+    { "x","xsv",_fipc, 0, cm_print_sv, cm_get_sv, cm_set_sv, nullptr, X_SEARCH_VELOCITY },
+    { "x","xlv",_fipc, 2, cm_print_lv, cm_get_lv, cm_set_lv, nullptr, X_LATCH_VELOCITY },
+    { "x","xlb",_fipc, 5, cm_print_lb, cm_get_lb, cm_set_lb, nullptr, X_LATCH_BACKOFF },
+    { "x","xzb",_fipc, 5, cm_print_zb, cm_get_zb, cm_set_zb, nullptr, X_ZERO_BACKOFF },
 
-constexpr cfgItem_t di_config_items_1[] = {
+    { "y","yam",_iip,  0, cm_print_am, cm_get_am, cm_set_am, nullptr, Y_AXIS_MODE },
+    { "y","yvm",_fipc, 0, cm_print_vm, cm_get_vm, cm_set_vm, nullptr, Y_VELOCITY_MAX },
+    { "y","yfr",_fipc, 0, cm_print_fr, cm_get_fr, cm_set_fr, nullptr, Y_FEEDRATE_MAX },
+    { "y","ytn",_fipc, 5, cm_print_tn, cm_get_tn, cm_set_tn, nullptr, Y_TRAVEL_MIN },
+    { "y","ytm",_fipc, 5, cm_print_tm, cm_get_tm, cm_set_tm, nullptr, Y_TRAVEL_MAX },
+    { "y","yjm",_fipc, 0, cm_print_jm, cm_get_jm, cm_set_jm, nullptr, Y_JERK_MAX },
+    { "y","yjh",_fipc, 0, cm_print_jh, cm_get_jh, cm_set_jh, nullptr, Y_JERK_HIGH_SPEED },
+    { "y","yhi",_iip,  0, cm_print_hi, cm_get_hi, cm_set_hi, nullptr, Y_HOMING_INPUT },
+    { "y","yhd",_iip,  0, cm_print_hd, cm_get_hd, cm_set_hd, nullptr, Y_HOMING_DIRECTION },
+    { "y","ysv",_fipc, 0, cm_print_sv, cm_get_sv, cm_set_sv, nullptr, Y_SEARCH_VELOCITY },
+    { "y","ylv",_fipc, 2, cm_print_lv, cm_get_lv, cm_set_lv, nullptr, Y_LATCH_VELOCITY },
+    { "y","ylb",_fipc, 5, cm_print_lb, cm_get_lb, cm_set_lb, nullptr, Y_LATCH_BACKOFF },
+    { "y","yzb",_fipc, 5, cm_print_zb, cm_get_zb, cm_set_zb, nullptr, Y_ZERO_BACKOFF },
+
+    { "z","zam",_iip,  0, cm_print_am, cm_get_am, cm_set_am, nullptr, Z_AXIS_MODE },
+    { "z","zvm",_fipc, 0, cm_print_vm, cm_get_vm, cm_set_vm, nullptr, Z_VELOCITY_MAX },
+    { "z","zfr",_fipc, 0, cm_print_fr, cm_get_fr, cm_set_fr, nullptr, Z_FEEDRATE_MAX },
+    { "z","ztn",_fipc, 5, cm_print_tn, cm_get_tn, cm_set_tn, nullptr, Z_TRAVEL_MIN },
+    { "z","ztm",_fipc, 5, cm_print_tm, cm_get_tm, cm_set_tm, nullptr, Z_TRAVEL_MAX },
+    { "z","zjm",_fipc, 0, cm_print_jm, cm_get_jm, cm_set_jm, nullptr, Z_JERK_MAX },
+    { "z","zjh",_fipc, 0, cm_print_jh, cm_get_jh, cm_set_jh, nullptr, Z_JERK_HIGH_SPEED },
+    { "z","zhi",_iip,  0, cm_print_hi, cm_get_hi, cm_set_hi, nullptr, Z_HOMING_INPUT },
+    { "z","zhd",_iip,  0, cm_print_hd, cm_get_hd, cm_set_hd, nullptr, Z_HOMING_DIRECTION },
+    { "z","zsv",_fipc, 0, cm_print_sv, cm_get_sv, cm_set_sv, nullptr, Z_SEARCH_VELOCITY },
+    { "z","zlv",_fipc, 2, cm_print_lv, cm_get_lv, cm_set_lv, nullptr, Z_LATCH_VELOCITY },
+    { "z","zlb",_fipc, 5, cm_print_lb, cm_get_lb, cm_set_lb, nullptr, Z_LATCH_BACKOFF },
+    { "z","zzb",_fipc, 5, cm_print_zb, cm_get_zb, cm_set_zb, nullptr, Z_ZERO_BACKOFF },
+
+#if (AXES == 9)
+    { "u","uam",_iip,  0, cm_print_am, cm_get_am, cm_set_am, nullptr, U_AXIS_MODE },
+    { "u","uvm",_fipc, 0, cm_print_vm, cm_get_vm, cm_set_vm, nullptr, U_VELOCITY_MAX },
+    { "u","ufr",_fipc, 0, cm_print_fr, cm_get_fr, cm_set_fr, nullptr, U_FEEDRATE_MAX },
+    { "u","utn",_fipc, 5, cm_print_tn, cm_get_tn, cm_set_tn, nullptr, U_TRAVEL_MIN },
+    { "u","utm",_fipc, 5, cm_print_tm, cm_get_tm, cm_set_tm, nullptr, U_TRAVEL_MAX },
+    { "u","ujm",_fipc, 0, cm_print_jm, cm_get_jm, cm_set_jm, nullptr, U_JERK_MAX },
+    { "u","ujh",_fipc, 0, cm_print_jh, cm_get_jh, cm_set_jh, nullptr, U_JERK_HIGH_SPEED },
+    { "u","uhi",_iip,  0, cm_print_hi, cm_get_hi, cm_set_hi, nullptr, U_HOMING_INPUT },
+    { "u","uhd",_iip,  0, cm_print_hd, cm_get_hd, cm_set_hd, nullptr, U_HOMING_DIRECTION },
+    { "u","usv",_fipc, 0, cm_print_sv, cm_get_sv, cm_set_sv, nullptr, U_SEARCH_VELOCITY },
+    { "u","ulv",_fipc, 2, cm_print_lv, cm_get_lv, cm_set_lv, nullptr, U_LATCH_VELOCITY },
+    { "u","ulb",_fipc, 5, cm_print_lb, cm_get_lb, cm_set_lb, nullptr, U_LATCH_BACKOFF },
+    { "u","uzb",_fipc, 5, cm_print_zb, cm_get_zb, cm_set_zb, nullptr, U_ZERO_BACKOFF },
+
+    { "v","vam",_iip,  0, cm_print_am, cm_get_am, cm_set_am, nullptr, V_AXIS_MODE },
+    { "v","vvm",_fipc, 0, cm_print_vm, cm_get_vm, cm_set_vm, nullptr, V_VELOCITY_MAX },
+    { "v","vfr",_fipc, 0, cm_print_fr, cm_get_fr, cm_set_fr, nullptr, V_FEEDRATE_MAX },
+    { "v","vtn",_fipc, 5, cm_print_tn, cm_get_tn, cm_set_tn, nullptr, V_TRAVEL_MIN },
+    { "v","vtm",_fipc, 5, cm_print_tm, cm_get_tm, cm_set_tm, nullptr, V_TRAVEL_MAX },
+    { "v","vjm",_fipc, 0, cm_print_jm, cm_get_jm, cm_set_jm, nullptr, V_JERK_MAX },
+    { "v","vjh",_fipc, 0, cm_print_jh, cm_get_jh, cm_set_jh, nullptr, V_JERK_HIGH_SPEED },
+    { "v","vhi",_iip,  0, cm_print_hi, cm_get_hi, cm_set_hi, nullptr, V_HOMING_INPUT },
+    { "v","vhd",_iip,  0, cm_print_hd, cm_get_hd, cm_set_hd, nullptr, V_HOMING_DIRECTION },
+    { "v","vsv",_fipc, 0, cm_print_sv, cm_get_sv, cm_set_sv, nullptr, V_SEARCH_VELOCITY },
+    { "v","vlv",_fipc, 2, cm_print_lv, cm_get_lv, cm_set_lv, nullptr, V_LATCH_VELOCITY },
+    { "v","vlb",_fipc, 5, cm_print_lb, cm_get_lb, cm_set_lb, nullptr, V_LATCH_BACKOFF },
+    { "v","vzb",_fipc, 5, cm_print_zb, cm_get_zb, cm_set_zb, nullptr, V_ZERO_BACKOFF },
+
+    { "w","wam",_iip,  0, cm_print_am, cm_get_am, cm_set_am, nullptr, W_AXIS_MODE },
+    { "w","wvm",_fipc, 0, cm_print_vm, cm_get_vm, cm_set_vm, nullptr, W_VELOCITY_MAX },
+    { "w","wfr",_fipc, 0, cm_print_fr, cm_get_fr, cm_set_fr, nullptr, W_FEEDRATE_MAX },
+    { "w","wtn",_fipc, 5, cm_print_tn, cm_get_tn, cm_set_tn, nullptr, W_TRAVEL_MIN },
+    { "w","wtm",_fipc, 5, cm_print_tm, cm_get_tm, cm_set_tm, nullptr, W_TRAVEL_MAX },
+    { "w","wjm",_fipc, 0, cm_print_jm, cm_get_jm, cm_set_jm, nullptr, W_JERK_MAX },
+    { "w","wjh",_fipc, 0, cm_print_jh, cm_get_jh, cm_set_jh, nullptr, W_JERK_HIGH_SPEED },
+    { "w","whi",_iip,  0, cm_print_hi, cm_get_hi, cm_set_hi, nullptr, W_HOMING_INPUT },
+    { "w","whd",_iip,  0, cm_print_hd, cm_get_hd, cm_set_hd, nullptr, W_HOMING_DIRECTION },
+    { "w","wsv",_fipc, 0, cm_print_sv, cm_get_sv, cm_set_sv, nullptr, W_SEARCH_VELOCITY },
+    { "w","wlv",_fipc, 2, cm_print_lv, cm_get_lv, cm_set_lv, nullptr, W_LATCH_VELOCITY },
+    { "w","wlb",_fipc, 5, cm_print_lb, cm_get_lb, cm_set_lb, nullptr, W_LATCH_BACKOFF },
+    { "w","wzb",_fipc, 5, cm_print_zb, cm_get_zb, cm_set_zb, nullptr, W_ZERO_BACKOFF },
+#endif
+
+    { "a","aam",_iip,  0, cm_print_am, cm_get_am, cm_set_am, nullptr, A_AXIS_MODE },
+    { "a","avm",_fipc, 0, cm_print_vm, cm_get_vm, cm_set_vm, nullptr, A_VELOCITY_MAX },
+    { "a","afr",_fipc, 0, cm_print_fr, cm_get_fr, cm_set_fr, nullptr, A_FEEDRATE_MAX },
+    { "a","atn",_fipc, 5, cm_print_tn, cm_get_tn, cm_set_tn, nullptr, A_TRAVEL_MIN },
+    { "a","atm",_fipc, 5, cm_print_tm, cm_get_tm, cm_set_tm, nullptr, A_TRAVEL_MAX },
+    { "a","ajm",_fipc, 0, cm_print_jm, cm_get_jm, cm_set_jm, nullptr, A_JERK_MAX },
+    { "a","ajh",_fipc, 0, cm_print_jh, cm_get_jh, cm_set_jh, nullptr, A_JERK_HIGH_SPEED },
+    { "a","ara",_fipc, 5, cm_print_ra, cm_get_ra, cm_set_ra, nullptr, A_RADIUS},
+    { "a","ahi",_iip,  0, cm_print_hi, cm_get_hi, cm_set_hi, nullptr, A_HOMING_INPUT },
+    { "a","ahd",_iip,  0, cm_print_hd, cm_get_hd, cm_set_hd, nullptr, A_HOMING_DIRECTION },
+    { "a","asv",_fipc, 0, cm_print_sv, cm_get_sv, cm_set_sv, nullptr, A_SEARCH_VELOCITY },
+    { "a","alv",_fipc, 2, cm_print_lv, cm_get_lv, cm_set_lv, nullptr, A_LATCH_VELOCITY },
+    { "a","alb",_fipc, 5, cm_print_lb, cm_get_lb, cm_set_lb, nullptr, A_LATCH_BACKOFF },
+    { "a","azb",_fipc, 5, cm_print_zb, cm_get_zb, cm_set_zb, nullptr, A_ZERO_BACKOFF },
+
+    { "b","bam",_iip,  0, cm_print_am, cm_get_am, cm_set_am, nullptr, B_AXIS_MODE },
+    { "b","bvm",_fipc, 0, cm_print_vm, cm_get_vm, cm_set_vm, nullptr, B_VELOCITY_MAX },
+    { "b","bfr",_fipc, 0, cm_print_fr, cm_get_fr, cm_set_fr, nullptr, B_FEEDRATE_MAX },
+    { "b","btn",_fipc, 5, cm_print_tn, cm_get_tn, cm_set_tn, nullptr, B_TRAVEL_MIN },
+    { "b","btm",_fipc, 5, cm_print_tm, cm_get_tm, cm_set_tm, nullptr, B_TRAVEL_MAX },
+    { "b","bjm",_fipc, 0, cm_print_jm, cm_get_jm, cm_set_jm, nullptr, B_JERK_MAX },
+    { "b","bjh",_fipc, 0, cm_print_jh, cm_get_jh, cm_set_jh, nullptr, B_JERK_HIGH_SPEED },
+    { "b","bra",_fipc, 5, cm_print_ra, cm_get_ra, cm_set_ra, nullptr, B_RADIUS },
+    { "b","bhi",_iip,  0, cm_print_hi, cm_get_hi, cm_set_hi, nullptr, B_HOMING_INPUT },
+    { "b","bhd",_iip,  0, cm_print_hd, cm_get_hd, cm_set_hd, nullptr, B_HOMING_DIRECTION },
+    { "b","bsv",_fipc, 0, cm_print_sv, cm_get_sv, cm_set_sv, nullptr, B_SEARCH_VELOCITY },
+    { "b","blv",_fipc, 2, cm_print_lv, cm_get_lv, cm_set_lv, nullptr, B_LATCH_VELOCITY },
+    { "b","blb",_fipc, 5, cm_print_lb, cm_get_lb, cm_set_lb, nullptr, B_LATCH_BACKOFF },
+    { "b","bzb",_fipc, 5, cm_print_zb, cm_get_zb, cm_set_zb, nullptr, B_ZERO_BACKOFF },
+
+    { "c","cam",_iip,  0, cm_print_am, cm_get_am, cm_set_am, nullptr, C_AXIS_MODE },
+    { "c","cvm",_fipc, 0, cm_print_vm, cm_get_vm, cm_set_vm, nullptr, C_VELOCITY_MAX },
+    { "c","cfr",_fipc, 0, cm_print_fr, cm_get_fr, cm_set_fr, nullptr, C_FEEDRATE_MAX },
+    { "c","ctn",_fipc, 5, cm_print_tn, cm_get_tn, cm_set_tn, nullptr, C_TRAVEL_MIN },
+    { "c","ctm",_fipc, 5, cm_print_tm, cm_get_tm, cm_set_tm, nullptr, C_TRAVEL_MAX },
+    { "c","cjm",_fipc, 0, cm_print_jm, cm_get_jm, cm_set_jm, nullptr, C_JERK_MAX },
+    { "c","cjh",_fipc, 0, cm_print_jh, cm_get_jh, cm_set_jh, nullptr, C_JERK_HIGH_SPEED },
+    { "c","cra",_fipc, 5, cm_print_ra, cm_get_ra, cm_set_ra, nullptr, C_RADIUS },
+    { "c","chi",_iip,  0, cm_print_hi, cm_get_hi, cm_set_hi, nullptr, C_HOMING_INPUT },
+    { "c","chd",_iip,  0, cm_print_hd, cm_get_hd, cm_set_hd, nullptr, C_HOMING_DIRECTION },
+    { "c","csv",_fipc, 0, cm_print_sv, cm_get_sv, cm_set_sv, nullptr, C_SEARCH_VELOCITY },
+    { "c","clv",_fipc, 2, cm_print_lv, cm_get_lv, cm_set_lv, nullptr, C_LATCH_VELOCITY },
+    { "c","clb",_fipc, 5, cm_print_lb, cm_get_lb, cm_set_lb, nullptr, C_LATCH_BACKOFF },
+    { "c","czb",_fipc, 5, cm_print_zb, cm_get_zb, cm_set_zb, nullptr, C_ZERO_BACKOFF },
+
+
+
     // Digital input configs
     // generated with ${PROJECT_ROOT}/Resources/generate_dins_cfgArray.js
 
@@ -560,11 +665,8 @@ constexpr cfgItem_t di_config_items_1[] = {
 #endif
 
     // END generated with ${PROJECT_ROOT}/Resources/generate_dins_cfgArray.js
-};
-constexpr cfgSubtableFromStaticArray di_config_1 {di_config_items_1};
-constexpr const configSubtable * const getDIConfig_1() { return &di_config_1; }
 
-constexpr cfgItem_t in_config_items_1[] = {
+
     // Digital input state readers
     { "in","in1", _i0, 0,  din_print_state, din_get_input, set_ro,  &in1,  0 },
     { "in","in2", _i0, 0,  din_print_state, din_get_input, set_ro,  &in2,  0 },
@@ -582,11 +684,7 @@ constexpr cfgItem_t in_config_items_1[] = {
     { "in","in14", _i0, 0, din_print_state, din_get_input, set_ro,  &in14, 0 },
     { "in","in15", _i0, 0, din_print_state, din_get_input, set_ro,  &in15, 0 },
     { "in","in16", _i0, 0, din_print_state, din_get_input, set_ro,  &in16, 0 },
-};
-constexpr cfgSubtableFromStaticArray in_config_1 {in_config_items_1};
-constexpr const configSubtable * const getINConfig_1() { return &in_config_1; }
 
-constexpr cfgItem_t do_config_items_1[] = {
     // digital output configs
     { "do1", "do1en", _iip, 0,   dout_print_en,  dout_get_en,  dout_set_en,  &dout1,  DO1_ENABLED },
     { "do1", "do1po", _iip, 0,   dout_print_po,  dout_get_po,  dout_set_po,  &dout1,  DO1_POLARITY },
@@ -656,11 +754,6 @@ constexpr cfgItem_t do_config_items_1[] = {
     { "do14", "do14po", _iip, 0, dout_print_po,  dout_get_po,  dout_set_po,  &dout14, DO14_POLARITY },
     { "do14", "do14out",_iip, 0, dout_print_out, dout_get_out, dout_set_out, &dout14, DO14_EXTERNAL_NUMBER },
 #endif
-};
-constexpr cfgSubtableFromStaticArray do_config_1 {do_config_items_1};
-constexpr const configSubtable * const getDOConfig_1() { return &do_config_1; }
-
-constexpr cfgItem_t out_config_items_1[] = {
     // Digital output state readers (default to non-active)
     { "out","out1",  _f0, 2, dout_print_out, dout_get_output, dout_set_output, &out1,  0 },
     { "out","out2",  _f0, 2, dout_print_out, dout_get_output, dout_set_output, &out2,  0 },
@@ -678,11 +771,7 @@ constexpr cfgItem_t out_config_items_1[] = {
     { "out","out14", _f0, 2, dout_print_out, dout_get_output, dout_set_output, &out14, 0 },
     { "out","out15", _f0, 2, dout_print_out, dout_get_output, dout_set_output, &out15, 0 },
     { "out","out16", _f0, 2, dout_print_out, dout_get_output, dout_set_output, &out16, 0 },
-};
-constexpr cfgSubtableFromStaticArray out_config_1 {out_config_items_1};
-constexpr const configSubtable * const getOUTConfig_1() { return &out_config_1; }
 
-constexpr cfgItem_t ai_config_items_1[] = {
     // Analog input configs
 #if (A_IN_CHANNELS >= 1)
     { "ai1","ai1en",_iip, 0, ai_print_en,         ai_get_en,         ai_set_en,      &ai1,  AI1_ENABLED },
@@ -728,9 +817,7 @@ constexpr cfgItem_t ai_config_items_1[] = {
     { "ai4","ai4p4",_fip, 4, ai_print_p,          ai_get_p4,         ai_set_p4,      &ai4,  AI4_P4 },
     { "ai4","ai4p5",_fip, 4, ai_print_p,          ai_get_p5,         ai_set_p5,      &ai4,  AI4_P5 },
 #endif
-};
 
-constexpr cfgItem_t ain_config_items_1[] = {
     { "ain1","ain1vv",_f0,  4, ain_print_value,      ain_get_value,      set_ro,         &ain1,  0 },
     { "ain1","ain1rv",_f0,  2, ain_print_resistance, ain_get_resistance, set_ro,         &ain1,  0 },
     { "ain2","ain2vv",_f0,  4, ain_print_value,      ain_get_value,      set_ro,         &ain2,  0 },
@@ -747,13 +834,20 @@ constexpr cfgItem_t ain_config_items_1[] = {
     { "ain7","ain7rv",_f0,  2, ain_print_resistance, ain_get_resistance, set_ro,         &ain7,  0 },
     { "ain8","ain8vv",_f0,  4, ain_print_value,      ain_get_value,      set_ro,         &ain8,  0 },
     { "ain8","ain8rv",_f0,  2, ain_print_resistance, ain_get_resistance, set_ro,         &ain8,  0 },
-};
-constexpr cfgSubtableFromStaticArray ain_config_1 {ain_config_items_1};
-constexpr const configSubtable * const getAINConfig_1() { return &ain_config_1; }
 
-// p1_config_1
+    // PWM settings
+    { "p1","p1frq",_fip, 0, pwm_print_p1frq, pwm_get_p1frq, pwm_set_p1frq, nullptr, P1_PWM_FREQUENCY },
+    { "p1","p1csl",_fip, 0, pwm_print_p1csl, pwm_get_p1csl, pwm_set_p1csl, nullptr, P1_CW_SPEED_LO },
+    { "p1","p1csh",_fip, 0, pwm_print_p1csh, pwm_get_p1csh, pwm_set_p1csh, nullptr, P1_CW_SPEED_HI },
+    { "p1","p1cpl",_fip, 3, pwm_print_p1cpl, pwm_get_p1cpl, pwm_set_p1cpl, nullptr, P1_CW_PHASE_LO },
+    { "p1","p1cph",_fip, 3, pwm_print_p1cph, pwm_get_p1cph, pwm_set_p1cph, nullptr, P1_CW_PHASE_HI },
+    { "p1","p1wsl",_fip, 0, pwm_print_p1wsl, pwm_get_p1wsl, pwm_set_p1wsl, nullptr, P1_CCW_SPEED_LO },
+    { "p1","p1wsh",_fip, 0, pwm_print_p1wsh, pwm_get_p1wsh, pwm_set_p1wsh, nullptr, P1_CCW_SPEED_HI },
+    { "p1","p1wpl",_fip, 3, pwm_print_p1wpl, pwm_get_p1wpl, pwm_set_p1wpl, nullptr, P1_CCW_PHASE_LO },
+    { "p1","p1wph",_fip, 3, pwm_print_p1wph, pwm_get_p1wph, pwm_set_p1wph, nullptr, P1_CCW_PHASE_HI },
+    { "p1","p1pof",_fip, 3, pwm_print_p1pof, pwm_get_p1pof, pwm_set_p1pof, nullptr, P1_PWM_PHASE_OFF },
+    { "p1","p1k"  ,_fip, 3, pwm_print_p1k,   pwm_get_p1k,   pwm_set_p1k,   nullptr, P1_PWM_K_VALUE },
 
-constexpr cfgItem_t pid_config_items_1[] = {
     // temperature configs - pid active values (read-only)
     // NOTICE: If you change these PID group keys, you MUST change the get/set functions too!
     { "pid1","pid1p",_fip, 3, tx_print_nul, cm_get_pid_p, set_ro, nullptr, 0 },
@@ -767,11 +861,7 @@ constexpr cfgItem_t pid_config_items_1[] = {
     { "pid3","pid3p",_fip, 3, tx_print_nul, cm_get_pid_p, set_ro, nullptr, 0 },
     { "pid3","pid3i",_fip, 5, tx_print_nul, cm_get_pid_i, set_ro, nullptr, 0 },
     { "pid3","pid3d",_fip, 5, tx_print_nul, cm_get_pid_d, set_ro, nullptr, 0 },
-};
-constexpr cfgSubtableFromStaticArray pid_config_1 {pid_config_items_1};
-constexpr const configSubtable * const getPIDConfig_1() { return &pid_config_1; }
 
-constexpr cfgItem_t he_config_items_1[] = {
     // temperature configs - heater set values (read-write)
     // NOTICE: If you change these heater group keys, you MUST change the get/set functions too!
     { "he1","he1e", _bip, 0, tx_print_nul, cm_get_heater_enable,   cm_set_heater_enable,   nullptr, H1_DEFAULT_ENABLE },
@@ -824,20 +914,14 @@ constexpr cfgItem_t he_config_items_1[] = {
     { "he3","he3fm",_fi,  1, tx_print_nul, cm_get_fan_min_power,   cm_set_fan_min_power,   nullptr, 0 },
     { "he3","he3fl",_fi,  1, tx_print_nul, cm_get_fan_low_temp,    cm_set_fan_low_temp,    nullptr, 0 },
     { "he3","he3fh",_fi,  1, tx_print_nul, cm_get_fan_high_temp,   cm_set_fan_high_temp,   nullptr, 0 },
-};
-constexpr cfgSubtableFromStaticArray he_config_1 {he_config_items_1};
-constexpr const configSubtable * const getHEConfig_1() { return &he_config_1; }
 
-constexpr cfgItem_t cm_coor_config_items_1[] = {
     // Coordinate system offsets (G54-G59 and G92)
     { "g54","g54x",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G54_X_OFFSET },
     { "g54","g54y",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G54_Y_OFFSET },
     { "g54","g54z",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G54_Z_OFFSET },
-#if (AXES == 9)
     { "g54","g54u",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G54_U_OFFSET },
     { "g54","g54v",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G54_V_OFFSET },
     { "g54","g54w",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G54_W_OFFSET },
-#endif
     { "g54","g54a",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G54_A_OFFSET },
     { "g54","g54b",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G54_B_OFFSET },
     { "g54","g54c",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G54_C_OFFSET },
@@ -845,11 +929,9 @@ constexpr cfgItem_t cm_coor_config_items_1[] = {
     { "g55","g55x",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G55_X_OFFSET },
     { "g55","g55y",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G55_Y_OFFSET },
     { "g55","g55z",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G55_Z_OFFSET },
-#if (AXES == 9)
     { "g55","g55u",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G55_U_OFFSET },
     { "g55","g55v",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G55_V_OFFSET },
     { "g55","g55w",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G55_W_OFFSET },
-#endif
     { "g55","g55a",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G55_A_OFFSET },
     { "g55","g55b",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G55_B_OFFSET },
     { "g55","g55c",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G55_C_OFFSET },
@@ -857,11 +939,9 @@ constexpr cfgItem_t cm_coor_config_items_1[] = {
     { "g56","g56x",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G56_X_OFFSET },
     { "g56","g56y",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G56_Y_OFFSET },
     { "g56","g56z",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G56_Z_OFFSET },
-#if (AXES == 9)
     { "g56","g56u",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G56_U_OFFSET },
     { "g56","g56v",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G56_V_OFFSET },
     { "g56","g56w",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G56_W_OFFSET },
-#endif
     { "g56","g56a",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G56_A_OFFSET },
     { "g56","g56b",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G56_B_OFFSET },
     { "g56","g56c",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G56_C_OFFSET },
@@ -869,11 +949,9 @@ constexpr cfgItem_t cm_coor_config_items_1[] = {
     { "g57","g57x",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G57_X_OFFSET },
     { "g57","g57y",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G57_Y_OFFSET },
     { "g57","g57z",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G57_Z_OFFSET },
-#if (AXES == 9)
     { "g57","g57u",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G57_U_OFFSET },
     { "g57","g57v",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G57_V_OFFSET },
     { "g57","g57w",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G57_W_OFFSET },
-#endif
     { "g57","g57a",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G57_A_OFFSET },
     { "g57","g57b",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G57_B_OFFSET },
     { "g57","g57c",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G57_C_OFFSET },
@@ -881,11 +959,9 @@ constexpr cfgItem_t cm_coor_config_items_1[] = {
     { "g58","g58x",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G58_X_OFFSET },
     { "g58","g58y",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G58_Y_OFFSET },
     { "g58","g58z",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G58_Z_OFFSET },
-#if (AXES == 9)
     { "g58","g58u",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G58_U_OFFSET },
     { "g58","g58v",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G58_V_OFFSET },
     { "g58","g58w",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G58_W_OFFSET },
-#endif
     { "g58","g58a",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G58_A_OFFSET },
     { "g58","g58b",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G58_B_OFFSET },
     { "g58","g58c",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G58_C_OFFSET },
@@ -893,11 +969,9 @@ constexpr cfgItem_t cm_coor_config_items_1[] = {
     { "g59","g59x",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G59_X_OFFSET },
     { "g59","g59y",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G59_Y_OFFSET },
     { "g59","g59z",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G59_Z_OFFSET },
-#if (AXES == 9)
     { "g59","g59u",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G59_U_OFFSET },
     { "g59","g59v",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G59_V_OFFSET },
     { "g59","g59w",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G59_W_OFFSET },
-#endif
     { "g59","g59a",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G59_A_OFFSET },
     { "g59","g59b",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G59_B_OFFSET },
     { "g59","g59c",_fipc, 5, cm_print_cofs, cm_get_coord, cm_set_coord, nullptr, G59_C_OFFSET },
@@ -905,11 +979,9 @@ constexpr cfgItem_t cm_coor_config_items_1[] = {
     { "g92","g92x",_fic, 5, cm_print_cofs, cm_get_g92, set_ro, nullptr, 0 },// G92 handled differently
     { "g92","g92y",_fic, 5, cm_print_cofs, cm_get_g92, set_ro, nullptr, 0 },
     { "g92","g92z",_fic, 5, cm_print_cofs, cm_get_g92, set_ro, nullptr, 0 },
-#if (AXES == 9)
     { "g92","g92u",_fic, 5, cm_print_cofs, cm_get_g92, set_ro, nullptr, 0 },
     { "g92","g92v",_fic, 5, cm_print_cofs, cm_get_g92, set_ro, nullptr, 0 },
     { "g92","g92w",_fic, 5, cm_print_cofs, cm_get_g92, set_ro, nullptr, 0 },
-#endif
     { "g92","g92a",_fic, 5, cm_print_cofs, cm_get_g92, set_ro, nullptr, 0 },
     { "g92","g92b",_fic, 5, cm_print_cofs, cm_get_g92, set_ro, nullptr, 0 },
     { "g92","g92c",_fic, 5, cm_print_cofs, cm_get_g92, set_ro, nullptr, 0 },
@@ -918,11 +990,9 @@ constexpr cfgItem_t cm_coor_config_items_1[] = {
     { "g28","g28x",_fic, 5, cm_print_cpos, cm_get_g28, set_ro, nullptr, 0 },// g28 handled differently
     { "g28","g28y",_fic, 5, cm_print_cpos, cm_get_g28, set_ro, nullptr, 0 },
     { "g28","g28z",_fic, 5, cm_print_cpos, cm_get_g28, set_ro, nullptr, 0 },
-#if (AXES == 9)
     { "g28","g28u",_fic, 5, cm_print_cpos, cm_get_g28, set_ro, nullptr, 0 },
     { "g28","g28v",_fic, 5, cm_print_cpos, cm_get_g28, set_ro, nullptr, 0 },
     { "g28","g28w",_fic, 5, cm_print_cpos, cm_get_g28, set_ro, nullptr, 0 },
-#endif
     { "g28","g28a",_fic, 5, cm_print_cpos, cm_get_g28, set_ro, nullptr, 0 },
     { "g28","g28b",_fic, 5, cm_print_cpos, cm_get_g28, set_ro, nullptr, 0 },
     { "g28","g28c",_fic, 5, cm_print_cpos, cm_get_g28, set_ro, nullptr, 0 },
@@ -930,29 +1000,19 @@ constexpr cfgItem_t cm_coor_config_items_1[] = {
     { "g30","g30x",_fic, 5, cm_print_cpos, cm_get_g30, set_ro, nullptr, 0 },// g30 handled differently
     { "g30","g30y",_fic, 5, cm_print_cpos, cm_get_g30, set_ro, nullptr, 0 },
     { "g30","g30z",_fic, 5, cm_print_cpos, cm_get_g30, set_ro, nullptr, 0 },
-#if (AXES == 9)
     { "g30","g30u",_fic, 5, cm_print_cpos, cm_get_g30, set_ro, nullptr, 0 },
     { "g30","g30v",_fic, 5, cm_print_cpos, cm_get_g30, set_ro, nullptr, 0 },
     { "g30","g30w",_fic, 5, cm_print_cpos, cm_get_g30, set_ro, nullptr, 0 },
-#endif
     { "g30","g30a",_fic, 5, cm_print_cpos, cm_get_g30, set_ro, nullptr, 0 },
     { "g30","g30b",_fic, 5, cm_print_cpos, cm_get_g30, set_ro, nullptr, 0 },
     { "g30","g30c",_fic, 5, cm_print_cpos, cm_get_g30, set_ro, nullptr, 0 },
-};
-constexpr cfgSubtableFromStaticArray cm_coor_config_1 {cm_coor_config_items_1};
-constexpr const configSubtable * const getCoorConfig_1() { return &cm_coor_config_1; }
 
-constexpr cfgItem_t jobid_config_items_1[] = {
     // this is a 128bit UUID for identifying a previously committed job state
     { "jid","jida",_d0, 0, tx_print_nul, get_data, set_data, &cfg.job_id[0], 0 },
     { "jid","jidb",_d0, 0, tx_print_nul, get_data, set_data, &cfg.job_id[1], 0 },
     { "jid","jidc",_d0, 0, tx_print_nul, get_data, set_data, &cfg.job_id[2], 0 },
     { "jid","jidd",_d0, 0, tx_print_nul, get_data, set_data, &cfg.job_id[3], 0 },
-};
-constexpr cfgSubtableFromStaticArray jobid_config_1 {jobid_config_items_1};
-constexpr const configSubtable * const getJobIDConfig_1() { return &jobid_config_1; }
 
-constexpr cfgItem_t fixturing_config_items_1[] = {
     // fixturing information
     { "fxa","fxast",_fipc, 0, tx_print_nul, get_flt, set_flt, &cfg.fx_state_a, 0 },
     { "fxa","fxa1x",_fipc, 3, tx_print_nul, get_flt, set_flt, &cfg.fx_coords_a[0][0], 0 },
@@ -963,24 +1023,27 @@ constexpr cfgItem_t fixturing_config_items_1[] = {
     { "fxa","fxa3y",_fipc, 3, tx_print_nul, get_flt, set_flt, &cfg.fx_coords_a[2][1], 0 },
     { "fxa","fxa4x",_fipc, 3, tx_print_nul, get_flt, set_flt, &cfg.fx_coords_a[3][0], 0 },
     { "fxa","fxa4y",_fipc, 3, tx_print_nul, get_flt, set_flt, &cfg.fx_coords_a[3][1], 0 },
-};
-constexpr cfgSubtableFromStaticArray fixturing_config_1 {fixturing_config_items_1};
-constexpr const configSubtable * const getFixturingConfig_1() { return &fixturing_config_1; }
 
-// spindle
+    // Spindle functions
+    { "sp","spmo", _i0,  0, sp_print_spmo, get_nul,     set_nul,     nullptr, 0 }, // keeping this key around, but it returns null and does nothing
+    { "sp","spph", _bip, 0, sp_print_spph, sp_get_spph, sp_set_spph, nullptr, SPINDLE_PAUSE_ON_HOLD },
+    { "sp","spde", _fip, 2, sp_print_spde, sp_get_spde, sp_set_spde, nullptr, SPINDLE_SPINUP_DELAY },
+    { "sp","spsn", _fip, 2, sp_print_spsn, sp_get_spsn, sp_set_spsn, nullptr, SPINDLE_SPEED_MIN},
+    { "sp","spsm", _fip, 2, sp_print_spsm, sp_get_spsm, sp_set_spsm, nullptr, SPINDLE_SPEED_MAX},
+    { "sp","spep", _iip, 0, sp_print_spep, sp_get_spep, sp_set_spep, nullptr, SPINDLE_ENABLE_POLARITY },
+    { "sp","spdp", _iip, 0, sp_print_spdp, sp_get_spdp, sp_set_spdp, nullptr, SPINDLE_DIR_POLARITY },
+    { "sp","spoe", _bip, 0, sp_print_spoe, sp_get_spoe, sp_set_spoe, nullptr, SPINDLE_OVERRIDE_ENABLE},
+    { "sp","spo",  _fip, 3, sp_print_spo,  sp_get_spo,  sp_set_spo,  nullptr, SPINDLE_OVERRIDE_FACTOR},
+    { "sp","spc",  _i0,  0, sp_print_spc,  sp_get_spc,  sp_set_spc,  nullptr, 0 },   // spindle state
+    { "sp","sps",  _f0,  0, sp_print_sps,  sp_get_sps,  sp_set_sps,  nullptr, 0 },   // spindle speed
 
-constexpr cfgItem_t coolant_config_items_1[] = {
     // Coolant functions
     { "co","coph", _bip, 0, co_print_coph, co_get_coph, co_set_coph, nullptr, COOLANT_PAUSE_ON_HOLD },
     { "co","comp", _iip, 0, co_print_comp, co_get_comp, co_set_comp, nullptr, COOLANT_MIST_POLARITY },
     { "co","cofp", _iip, 0, co_print_cofp, co_get_cofp, co_set_cofp, nullptr, COOLANT_FLOOD_POLARITY },
     { "co","com",  _i0,  0, co_print_com,  co_get_com,  co_set_com,  nullptr, 0 },   // mist coolant enable
     { "co","cof",  _i0,  0, co_print_cof,  co_get_cof,  co_set_cof,  nullptr, 0 },   // flood coolant enable
-};
-constexpr cfgSubtableFromStaticArray coolant_config_1 {coolant_config_items_1};
-constexpr const configSubtable * const getCoolantConfig_1() { return &coolant_config_1; }
 
-constexpr cfgItem_t sys_config_items_2[] = {
     // General system parameters
     { "sys","jt",  _fipn, 2, cm_print_jt,  cm_get_jt,  cm_set_jt,  nullptr, JUNCTION_INTEGRATION_TIME },
     { "sys","ct",  _fipnc,4, cm_print_ct,  cm_get_ct,  cm_set_ct,  nullptr, CHORDAL_TOLERANCE },
@@ -999,40 +1062,13 @@ constexpr cfgItem_t sys_config_items_2[] = {
 
     // kinematics controls
 #if KINEMATICS==KINE_FOUR_CABLE
-    { "kn","knfc", _f0, 4, tx_print_nul, kn_get_force,    kn_set_force,    nullptr,       0 },
-    { "kn","knan", _f0, 0, tx_print_nul, kn_get_anchored, kn_set_anchored, nullptr,       0 },
-    { "kn","knpa", _f0, 4, tx_print_nul, kn_get_pos_a,    set_nul,         nullptr,       0 },
-    { "kn","knpb", _f0, 4, tx_print_nul, kn_get_pos_b,    set_nul,         nullptr,       0 },
-    { "kn","knpc", _f0, 4, tx_print_nul, kn_get_pos_c,    set_nul,         nullptr,       0 },
-    { "kn","knpd", _f0, 4, tx_print_nul, kn_get_pos_d,    set_nul,         nullptr,       0 },
+    { "sys","knfc", _f0, 4, tx_print_nul, kn_get_force,    kn_set_force,    nullptr,       0 },
+    { "sys","knan", _f0, 0, tx_print_nul, kn_get_anchored, kn_set_anchored, nullptr,       0 },
+    { "sys","knpa", _f0, 4, tx_print_nul, kn_get_pos_a,    set_nul,         nullptr,       0 },
+    { "sys","knpb", _f0, 4, tx_print_nul, kn_get_pos_b,    set_nul,         nullptr,       0 },
+    { "sys","knpc", _f0, 4, tx_print_nul, kn_get_pos_c,    set_nul,         nullptr,       0 },
+    { "sys","knpd", _f0, 4, tx_print_nul, kn_get_pos_d,    set_nul,         nullptr,       0 },
 #endif
-#if KINEMATICS==KINE_PRESSURE
-    { "kn","knfc",  _f0, 4, tx_print_nul, kn_get_force,             kn_set_force,             nullptr, 0 },
-    { "kn","knft",  _f0, 4, tx_print_nul, kn_get_target,            kn_set_target,            nullptr, 0 },
-    { "kn","knan",  _b0, 0, tx_print_nul, kn_get_anchored,          kn_set_anchored,          nullptr, 0 },
-    { "kn","knepm", _f0, 4, tx_print_nul, kn_get_epm,               kn_set_epm,               nullptr, 0 },
-    { "kn","knht",  _f0, 4, tx_print_nul, kn_get_hold_time,         kn_set_hold_time,         nullptr, 0 },
-    { "kn","knhr",  _f0, 4, tx_print_nul, kn_get_hold_ratio,        kn_set_hold_ratio,        nullptr, 0 },
-    { "kn","knp",   _f0, 4, tx_print_nul, kn_get_p_factor,          kn_set_p_factor,          nullptr, 0 },
-    { "kn","kni",   _f0, 4, tx_print_nul, kn_get_i_factor,          kn_set_i_factor,          nullptr, 0 },
-    { "kn","knd",   _f0, 4, tx_print_nul, kn_get_d_factor,          kn_set_d_factor,          nullptr, 0 },
-    { "kn","knp",   _f0, 4, tx_print_nul, kn_get_p_factor,          kn_set_p_factor,          nullptr, 0 },
-    { "kn","kni",   _f0, 4, tx_print_nul, kn_get_i_factor,          kn_set_i_factor,          nullptr, 0 },
-    { "kn","knd",   _f0, 4, tx_print_nul, kn_get_d_factor,          kn_set_d_factor,          nullptr, 0 },
-    { "kn","knev",  _f0, 4, tx_print_nul, kn_get_e_value,           set_nul,                  nullptr, 0 },
-    { "kn","kniv",  _f0, 4, tx_print_nul, kn_get_i_value,           set_nul,                  nullptr, 0 },
-    { "kn","kndv",  _f0, 4, tx_print_nul, kn_get_d_value,           set_nul,                  nullptr, 0 },
-    { "kn","knbf",  _f0, 4, tx_print_nul, kn_get_backoff_pressure,  kn_set_backoff_pressure,  nullptr, 0 },
-    { "kn","knec",  _i0, 0, tx_print_nul, kn_get_ec_value,          set_nul,                  nullptr, 0 },
-    { "kn","knuoc", _i0, 0, tx_print_nul, kn_get_uoc_value,         set_nul,                  nullptr, 0 },
-    { "kn","knumc", _i0, 0, tx_print_nul, kn_get_umc_value,         set_nul,                  nullptr, 0 },
-    { "kn","knpos1",_i0, 0, tx_print_nul, kn_get_pos_1,             set_nul,                  nullptr, 0 },
-    { "kn","knpos2",_i0, 0, tx_print_nul, kn_get_pos_2,             set_nul,                  nullptr, 0 },
-    { "kn","knpos3",_i0, 0, tx_print_nul, kn_get_pos_3,             set_nul,                  nullptr, 0 },
-    { "kn","knpos4",_i0, 0, tx_print_nul, kn_get_pos_4,             set_nul,                  nullptr, 0 },
-    { "kn","knpos5",_i0, 0, tx_print_nul, kn_get_pos_5,             set_nul,                  nullptr, 0 },
-#endif
-
 
     // Communications and reporting parameters
 #ifdef __TEXT_MODE
@@ -1078,11 +1114,7 @@ constexpr cfgItem_t sys_config_items_2[] = {
     { "", "help",_b0, 0, tx_print_nul, help_config, set_nul, nullptr, 0 },  // prints config help screen
     { "", "h",   _b0, 0, tx_print_nul, help_config, set_nul, nullptr, 0 },  // alias for "help"
 #endif
-};
-constexpr cfgSubtableFromStaticArray sys_config_2 {sys_config_items_2};
-constexpr const configSubtable * const getSysConfig_2() { return &sys_config_2; }
 
-constexpr cfgItem_t user_data_config_items_1[] = {
 #ifdef __USER_DATA
     // User defined data groups
     { "uda","uda0", _dip, 0, tx_print_int, get_data, set_data, &cfg.user_data_a[0], USER_DATA_A0 },
@@ -1105,11 +1137,7 @@ constexpr cfgItem_t user_data_config_items_1[] = {
     { "udd","udd2", _dip, 0, tx_print_int, get_data, set_data, &cfg.user_data_d[2], USER_DATA_D2 },
     { "udd","udd3", _dip, 0, tx_print_int, get_data, set_data, &cfg.user_data_d[3], USER_DATA_D3 },
 #endif
-};
-constexpr cfgSubtableFromStaticArray user_data_config_1 {user_data_config_items_1};
-constexpr const configSubtable * const getUserDataConfig_1() { return &user_data_config_1; }
 
-constexpr cfgItem_t tool_config_items_1[] = {
     // Tool table offsets
     { "tof","tofx",_fipc, 5, cm_print_cofs, cm_get_tof, cm_set_tof, nullptr, 0 },
     { "tof","tofy",_fipc, 5, cm_print_cofs, cm_get_tof, cm_set_tof, nullptr, 0 },
@@ -1509,13 +1537,9 @@ constexpr cfgItem_t tool_config_items_1[] = {
     { "tt32","tt32b",_fipc, 5, cm_print_cofs, cm_get_tt, cm_set_tt, nullptr, TT32_B_OFFSET },
     { "tt32","tt32c",_fipc, 5, cm_print_cofs, cm_get_tt, cm_set_tt, nullptr, TT32_C_OFFSET },
 #endif // TOOLS > 5
-};
-constexpr cfgSubtableFromStaticArray tool_config_1 {tool_config_items_1};
-constexpr const configSubtable * const getToolConfig_1() { return &tool_config_1; }
 
+    // Diagnostic parameters
 #ifdef __DIAGNOSTIC_PARAMETERS
-// Diagnostic parameters
-constexpr cfgItem_t diagnostic_config_items_1[] = {
     { "",    "clc",_f0, 0, tx_print_nul, st_clc,  st_clc, nullptr, 0 },  // clear diagnostic step counters
 
     { "_te","_tex",_f0, 2, tx_print_flt, get_flt, set_nul, &mr1.target[AXIS_X], 0 }, // X target endpoint
@@ -1531,11 +1555,7 @@ constexpr cfgItem_t diagnostic_config_items_1[] = {
     { "_tr","_tra",_f0, 2, tx_print_flt, get_flt, set_nul, &mr1.gm.target[AXIS_A], 0 },
     { "_tr","_trb",_f0, 2, tx_print_flt, get_flt, set_nul, &mr1.gm.target[AXIS_B], 0 },
     { "_tr","_trc",_f0, 2, tx_print_flt, get_flt, set_nul, &mr1.gm.target[AXIS_C], 0 },
-};
-constexpr cfgSubtableFromStaticArray diagnostic_config_1 {diagnostic_config_items_1};
-constexpr const configSubtable * const getDiagnosticConfig_1() { return &diagnostic_config_1; }
 
-constexpr cfgItem_t motor_diagnostic_config_items_1[] = {
 #if (MOTORS >= 1)
     { "_ts","_ts1",_f0, 2, tx_print_flt, get_flt, set_nul, &mr1.target_steps[MOTOR_1], 0 },      // Motor 1 target steps
     { "_ps","_ps1",_f0, 2, tx_print_flt, get_flt, set_nul, &mr1.position_steps[MOTOR_1], 0 },    // Motor 1 position steps
@@ -1584,65 +1604,59 @@ constexpr cfgItem_t motor_diagnostic_config_items_1[] = {
     { "_xs","_xs6",_f0, 2, tx_print_flt, get_flt, set_nul, &st_pre.mot[MOTOR_6].corrected_steps, 0 },
     { "_fe","_fe6",_f0, 2, tx_print_flt, get_flt, set_nul, &mr1.following_error[MOTOR_6], 0 },
 #endif
-};
-#endif  //  __DIAGNOSTIC_PARAMETERS
-constexpr cfgSubtableFromStaticArray motor_diagnostic_config_1 {motor_diagnostic_config_items_1};
-constexpr const configSubtable * const getMotorDiagnosticConfig_1() { return &motor_diagnostic_config_1; }
 
-constexpr cfgItem_t sr_presistence_config_items_1[] = {
-  // Persistence for status report - must be in sequence
+#endif  //  __DIAGNOSTIC_PARAMETERS
+
+    // Persistence for status report - must be in sequence
     // *** Count must agree with NV_STATUS_REPORT_LEN in report.h ***
-    { "","se00",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[0].index,0 }, // 950
-    { "","se01",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[1].index,0 },
-    { "","se02",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[2].index,0 },
-    { "","se03",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[3].index,0 },
-    { "","se04",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[4].index,0 },
-    { "","se05",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[5].index,0 },
-    { "","se06",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[6].index,0 },
-    { "","se07",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[7].index,0 },
-    { "","se08",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[8].index,0 },
-    { "","se09",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[9].index,0 },
-    { "","se10",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[10].index,0 },
-    { "","se11",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[11].index,0 },
-    { "","se12",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[12].index,0 },
-    { "","se13",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[13].index,0 },
-    { "","se14",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[14].index,0 },
-    { "","se15",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[15].index,0 },
-    { "","se16",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[16].index,0 },
-    { "","se17",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[17].index,0 },
-    { "","se18",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[18].index,0 },
-    { "","se19",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[19].index,0 },
-    { "","se20",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[20].index,0 },
-    { "","se21",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[21].index,0 },
-    { "","se22",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[22].index,0 },
-    { "","se23",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[23].index,0 },
-    { "","se24",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[24].index,0 },
-    { "","se25",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[25].index,0 },
-    { "","se26",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[26].index,0 },
-    { "","se27",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[27].index,0 },
-    { "","se28",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[28].index,0 },
-    { "","se29",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[29].index,0 },
-    { "","se30",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[30].index,0 },
-    { "","se31",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[31].index,0 },
-    { "","se32",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[32].index,0 },
-    { "","se33",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[33].index,0 },
-    { "","se34",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[34].index,0 },
-    { "","se35",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[35].index,0 },
-    { "","se36",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[36].index,0 },
-    { "","se37",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[37].index,0 },
-    { "","se38",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[38].index,0 },
-    // { "","se39",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[39].index,0 },
+    { "","se00",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[0],0 }, // 950
+    { "","se01",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[1],0 },
+    { "","se02",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[2],0 },
+    { "","se03",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[3],0 },
+    { "","se04",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[4],0 },
+    { "","se05",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[5],0 },
+    { "","se06",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[6],0 },
+    { "","se07",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[7],0 },
+    { "","se08",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[8],0 },
+    { "","se09",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[9],0 },
+    { "","se10",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[10],0 },
+    { "","se11",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[11],0 },
+    { "","se12",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[12],0 },
+    { "","se13",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[13],0 },
+    { "","se14",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[14],0 },
+    { "","se15",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[15],0 },
+    { "","se16",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[16],0 },
+    { "","se17",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[17],0 },
+    { "","se18",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[18],0 },
+    { "","se19",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[19],0 },
+    { "","se20",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[20],0 },
+    { "","se21",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[21],0 },
+    { "","se22",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[22],0 },
+    { "","se23",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[23],0 },
+    { "","se24",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[24],0 },
+    { "","se25",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[25],0 },
+    { "","se26",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[26],0 },
+    { "","se27",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[27],0 },
+    { "","se28",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[28],0 },
+    { "","se29",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[29],0 },
+    { "","se30",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[30],0 },
+    { "","se31",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[31],0 },
+    { "","se32",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[32],0 },
+    { "","se33",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[33],0 },
+    { "","se34",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[34],0 },
+    { "","se35",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[35],0 },
+    { "","se36",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[36],0 },
+    { "","se37",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[37],0 },
+    { "","se38",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[38],0 },
+    { "","se39",_ip, 0, tx_print_nul, get_int32, set_int32, &sr.status_report_list[39],0 },
     // Count is 40, since se00 counts as one.
-};
-constexpr cfgSubtableFromStaticArray sr_presistence_config_1 {sr_presistence_config_items_1};
-constexpr const configSubtable * const getSrPersistenceConfig_1() { return &sr_presistence_config_1; }
+
 
     // Group lookups - must follow the single-valued entries for proper sub-string matching
     // *** Must agree with NV_COUNT_GROUPS below ***
     // *** If you adjust the number of entries in a group you must also adjust the count for that group ***
     // *** COUNT STARTS FROM HERE ***
 
-constexpr cfgItem_t groups_config_items_1[] = {
 #define FIXED_GROUPS 4
     { "","sys",_f0, 0, tx_print_nul, get_grp, set_grp, nullptr, 0 },    // system group
     { "","p1", _f0, 0, tx_print_nul, get_grp, set_grp, nullptr, 0 },    // PWM 1 group
@@ -1743,13 +1757,6 @@ constexpr cfgItem_t groups_config_items_1[] = {
     { "","ain7", _f0, 0, tx_print_nul, get_grp, set_grp,nullptr,0 },
     { "","ain8", _f0, 0, tx_print_nul, get_grp, set_grp,nullptr,0 },
 
-#if KINEMATICS==KINE_PRESSURE || KINEMATICS==KINE_FOUR_CABLE
-#define KINEMATICS_GROUPS 1
-    { "","kn", _f0, 0, tx_print_nul, get_grp, set_grp,nullptr,0 },
-#else
-#define KINEMATICS_GROUPS 0
-#endif
-
 #define COORDINATE_OFFSET_GROUPS 9
     { "","g54",_f0, 0, tx_print_nul, get_grp, set_grp, nullptr, 0 },    // coord offset groups
     { "","g55",_f0, 0, tx_print_nul, get_grp, set_grp, nullptr, 0 },
@@ -1838,11 +1845,7 @@ constexpr cfgItem_t groups_config_items_1[] = {
     { "","_xs",_f0, 0, tx_print_nul, get_grp, set_grp, nullptr, 0 },    // correction steps group
     { "","_fe",_f0, 0, tx_print_nul, get_grp, set_grp, nullptr, 0 },    // following error group
 #endif
-};
-constexpr cfgSubtableFromStaticArray groups_config_1 {groups_config_items_1};
-constexpr const configSubtable * const getGroupsConfig_1() { return &groups_config_1; }
 
-constexpr cfgItem_t uber_groups_config_items_1[] = {
 #define NV_COUNT_UBER_GROUPS 6
     // Uber-group (groups of groups, for text-mode displays only)
     // *** Must agree with NV_COUNT_UBER_GROUPS below ****
@@ -1853,79 +1856,6 @@ constexpr cfgItem_t uber_groups_config_items_1[] = {
     { "", "do", _f0, 0, tx_print_nul,_do_outputs,set_nul, nullptr, 0 },
     { "", "$", _f0, 0, tx_print_nul, _do_all,    set_nul, nullptr, 0 }
 };
-constexpr cfgSubtableFromStaticArray uber_groups_config_1 {uber_groups_config_items_1};
-constexpr const configSubtable * const getUberGroupsConfig_1() { return &uber_groups_config_1; }
-
-auto nodes = makeSubtableNodes(
-    0, getSysConfig_1(), getCmConfig_1(), getMpoConfig_1(), getPosConfig_1(), getOfsConfig_1(), getHomConfig_1(),
-    getPrbConfig_1(), getJogConfig_1(), getPwrConfig_1(), getMotorConfig_1(), getAxisConfig_1(), getDIConfig_1(),
-    getINConfig_1(), getDOConfig_1(), getOUTConfig_1(), getAINConfig_1(), getP1Config_1(), getPIDConfig_1(),
-    getHEConfig_1(), getCoorConfig_1(), getJobIDConfig_1(), getFixturingConfig_1(), getSpindleConfig_1(),
-    getCoolantConfig_1(), getSysConfig_2(), getSysConfig_3(), getUserDataConfig_1(), getToolConfig_1(), getDiagnosticConfig_1(),
-    getMotorDiagnosticConfig_1(), getSrPersistenceConfig_1(), getGroupsConfig_1(), getUberGroupsConfig_1());
-
-
-// template <typename T, size_t length>
-// constexpr size_t size_of_array(T(&)[length]) {
-//     return length;
-// }
-
-
-configSubtableNode *configSubtableHead = &nodes.this_node;
-
-// Dummy config item for when there's an error
-constexpr cfgItem_t nullCfg = {"", "", _f0, 0, tx_print_nul, get_nul, set_nul, nullptr, 0};
-
-// Sythesize the old cfgArray[...] operator, must return SOMETHING
-const cfgItem_t &cfgArraySynthesizer::operator[](std::size_t idx) const {
-    if (!configSubtableHead) {
-        return nullCfg;
-    }
-    const cfgItem_t * const c = configSubtableHead->get(idx);
-    if (!c) {
-        return nullCfg;
-    }
-    return *c;
-}
-
-index_t cfgArraySynthesizer::getIndex(const char *group, const char *token)
-{
-    if (!configSubtableHead) {
-        return (NO_MATCH);
-    }
-    char str[TOKEN_LEN + GROUP_LEN+1];    // should actually never be more than TOKEN_LEN+1
-    strncpy(str, group, GROUP_LEN+1);
-    strncat(str, token, TOKEN_LEN+1);
-    return configSubtableHead->find(str);
-
-    // index_t i;
-    // index_t index_max = nv_index_max();
-
-    // for (i=0; i < index_max; i++) {
-    //     auto config = cfgArray[i];
-    //     if ((c = config.token[0]) != str[0]) { continue; }                  // 1st character mismatch
-    //     if ((c = config.token[1]) == NUL) { if (str[1] == NUL) return(i); } // one character match
-    //     if (c != str[1]) continue;                                          // 2nd character mismatch
-    //     if ((c = config.token[2]) == NUL) { if (str[2] == NUL) return(i); } // two character match
-    //     if (c != str[2]) continue;                                          // 3rd character mismatch
-    //     if ((c = config.token[3]) == NUL) { if (str[3] == NUL) return(i); } // three character match
-    //     if (c != str[3]) continue;                                          // 4th character mismatch
-    //     if ((c = config.token[4]) == NUL) { if (str[4] == NUL) return(i); } // four character match
-    //     if (c != str[4]) continue;                                          // 5th character mismatch
-    //     if ((c = config.token[5]) == NUL) { if (str[5] == NUL) return(i); } // four character match
-    //     if (c != str[5]) continue;                                          // 6th character mismatch
-    //     if ((c = config.token[6]) == NUL) { if (str[6] == NUL) return(i); } // four character match
-    //     if (c != str[6]) continue;                                          // 7th character mismatch
-    //     if ((c = config.token[7]) == NUL) { if (str[7] == NUL) return(i); } // four character match
-    //     if (c != str[7]) continue;                                          // 8th character mismatch
-    //     if ((c = config.token[8]) == NUL) { if (str[8] == NUL) return(i); } // four character match
-    //     if (c != str[8]) continue;                                          // 9th character mismatch
-    //     return (i);                                                         // five character match
-    // }
-    // return (NO_MATCH);
-}
-
-cfgArraySynthesizer cfgArray {};
 
 /***** Make sure these defines line up with any changes in the above table *****/
 
@@ -1935,7 +1865,6 @@ cfgArraySynthesizer cfgArray {};
                         + DIGITAL_IN_GROUPS \
                         + DIGITAL_OUT_GROUPS \
                         + ANALOG_IN_GROUPS \
-                        + KINEMATICS_GROUPS \
                         + COORDINATE_OFFSET_GROUPS \
                         + TOOL_OFFSET_GROUPS \
                         + MACHINE_STATE_GROUPS \
@@ -1944,7 +1873,7 @@ cfgArraySynthesizer cfgArray {};
                         + DIAGNOSTIC_GROUPS)
 
 /* <DO NOT MESS WITH THESE DEFINES> */
-#define NV_INDEX_MAX (nodes.this_node.length)
+#define NV_INDEX_MAX (sizeof(cfgArray) / sizeof(cfgItem_t))
 #define NV_INDEX_END_SINGLES    (NV_INDEX_MAX - NV_COUNT_UBER_GROUPS - NV_COUNT_GROUPS - NV_STATUS_REPORT_LEN)
 #define NV_INDEX_START_GROUPS    (NV_INDEX_MAX - NV_COUNT_UBER_GROUPS - NV_COUNT_GROUPS)
 #define NV_INDEX_START_UBER_GROUPS (NV_INDEX_MAX - NV_COUNT_UBER_GROUPS)
@@ -2088,6 +2017,7 @@ stat_t set_boolean(nvObj_t *nv, bool &value)
     nv->valuetype = TYPE_BOOLEAN;
     return STAT_OK;
 }
+
 
 stat_t get_integer(nvObj_t *nv, const int32_t value)
 {

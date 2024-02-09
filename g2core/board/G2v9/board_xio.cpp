@@ -35,8 +35,8 @@
 //******** USB ********
 #if XIO_HAS_USB
 const Motate::USBSettings_t Motate::USBSettings = {
-    /*gVendorID         = */ 0x1d50,
-    /*gProductID        = */ 0x606d,
+    /*gVendorID         = */ 0x04D8, // changed from 0x1d50, for BT_CNCMM 
+    /*gProductID        = */ 0xEC70, // changed from 0x606d, for BT_CNCMM 
     /*gProductVersion   = */ G2CORE_FIRMWARE_VERSION,
     /*gAttributes       = */ kUSBConfigAttributeSelfPowered,
     /*gPowerConsumption = */ 500

@@ -30,6 +30,8 @@
 /**** AxiDraw v3 Configuration *****************************************/
 /***********************************************************************/
 
+#include "hardware.h"
+
 // ***> NOTE: The init message must be a single line with no CRs or LFs
 #define INIT_MESSAGE "Initializing configs to AxiDraw v3 settings"
 
@@ -88,7 +90,6 @@
 #define MOTOR_POWER_TIMEOUT         2.00                    // motor power timeout in seconds
 
 #define KINEMATICS KINE_CORE_XY                             // X and Y MUST use the same settings!
-#define HAS_HOBBY_SERVO_MOTOR 1
 
 #define A_B_POWER_LEVEL 0.7
 #define A_B_MICROSTEPS 64
@@ -109,8 +110,6 @@
 #define M2_POLARITY                 0
 #define M2_POWER_MODE               MOTOR_POWER_MODE
 #define M2_POWER_LEVEL              A_B_POWER_LEVEL
-
-#include "hardware.h"
 
 #if MOTORS == 3
 // gQuadratic
@@ -199,13 +198,10 @@
 #define DI3_POLARITY                IO_ACTIVE_HIGH
 #define DI3_ACTION                  INPUT_ACTION_NONE
 
-#define DI4_POLARITY                IO_ACTIVE_HIGH
+#define DI4_MODE                    IO_ACTIVE_HIGH
 #define DI4_ACTION                  INPUT_ACTION_NONE
 
-// TODO - correct these to reasonable values - needs to switch between quint and quad
-#define SPINDLE_ENABLE_OUTPUT_NUMBER 0 // off
-#define SPINDLE_DIRECTION_OUTPUT_NUMBER 0 // off
-#define SPINDLE_PWM_NUMBER 0 // off
-#define SPINDLE_SPEED_CHANGE_PER_MS 0 // off
-#define MIST_ENABLE_OUTPUT_NUMBER 0 // off
-#define FLOOD_ENABLE_OUTPUT_NUMBER 0 // off
+#define DO1_MODE                    IO_ACTIVE_HIGH
+#define DO2_MODE                    IO_ACTIVE_HIGH
+#define DO3_MODE                    IO_ACTIVE_HIGH
+#define DO4_MODE                    IO_ACTIVE_HIGH

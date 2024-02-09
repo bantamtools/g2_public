@@ -207,4 +207,20 @@ class BantamSafetyManager : public SafetyManager {
     uint8_t get_esc_safety_state() { return (safety_state & BantamSafetyManager::SAFETY_ESC_MASK) != 0; }
 };
 
+stat_t cm_ack_estop(nvObj_t *nv);
+stat_t cm_get_safe(nvObj_t *nv);
+stat_t cm_get_estp(nvObj_t *nv);
+
+#ifdef __TEXT_MODE
+
+void cm_print_safe(nvObj_t *nv);
+void cm_print_estp(nvObj_t *nv);
+
+#else // __TEXT_MODE
+
+#define cm_print_vel tx_print_stub      // model state reporting
+#define cm_print_feed tx_print_stub
+
+#endif // __TEXT_MODE
+
 #endif //BANTAM_SAFETY_MANAGER_H_ONCE

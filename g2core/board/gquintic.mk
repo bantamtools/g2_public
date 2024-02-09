@@ -30,12 +30,6 @@ DEVICE_DEFINES += MOTATE_BOARD="gquintic-d"
 DEVICE_DEFINES += SETTINGS_FILE=${SETTINGS_FILE}
 endif
 
-ifeq ("$(BOARD)","gquintic-g")
-BASE_BOARD=gquintic
-QUINTIC_N20=1
-DEVICE_DEFINES += MOTATE_BOARD="gquintic-d"
-DEVICE_DEFINES += SETTINGS_FILE=${SETTINGS_FILE}
-endif
 
 ##########
 # The general gquintic BASE_BOARD.
@@ -48,19 +42,12 @@ ifeq ("$(BASE_BOARD)","gquintic")
 
     FIRST_LINK_SOURCES += $(sort $(wildcard ${MOTATE_PATH}/Atmel_sam_common/*.cpp)) $(sort $(wildcard ${MOTATE_PATH}/Atmel_sams70/*.cpp) $(wildcard ${BOARD_PATH}/*.cpp))
 
-    ifeq ("$(QUINTIC_N20)","1")
-        CHIP = SAMS70N20
-        export CHIP
-        CHIP_LOWERCASE = sams70n20
-        DEVICE_DEFINES += QUINTIC_N20=1
-    else
-        CHIP = SAMS70N19
-        export CHIP
-        CHIP_LOWERCASE = sams70n19
-    endif
+    CHIP = SAMS70N19
+    export CHIP
+    CHIP_LOWERCASE = sams70n19
 
     BOARD_PATH = ./board/gquintic
-    SOURCE_DIRS += ${BOARD_PATH} device/trinamic device/step_dir_hobbyservo device/max31865 device/i2c_eeprom device/i2c_multiplexer device/i2c_as5601 device/esc_spindle device/laser_toolhead device/bme280 device/honeywell-trustability-ssc
+    SOURCE_DIRS += ${BOARD_PATH} device/trinamic device/step_dir_hobbyservo device/max31865 device/i2c_eeprom device/i2c_multiplexer device/i2c_as5601
 
     PLATFORM_BASE = ${MOTATE_PATH}/platform/atmel_sam
     include $(PLATFORM_BASE).mk

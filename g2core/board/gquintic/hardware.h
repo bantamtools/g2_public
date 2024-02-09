@@ -33,22 +33,13 @@
 #include "settings.h"
 #include "error.h"
 
-#include "MotatePins.h" // QUINTIC_REVISION comes from the pintout file
-
-
 #ifndef HARDWARE_H_ONCE
 #define HARDWARE_H_ONCE
 
 /*--- Hardware platform enumerations ---*/
 
 #define G2CORE_HARDWARE_PLATFORM    "gQuintic"
-#define G2CORE_HARDWARE_VERSION_from_QUINTIC_REVISION(x)  "" #x ""
-#define G2CORE_HARDWARE_VERSION G2CORE_HARDWARE_VERSION_from_QUINTIC_REVISION(QUINTIC_REVISION)
-
-
-// Save some space ... we're tight
-#define TOOLS 5        // number of entries in tool table (index starts at 1)
-
+#define G2CORE_HARDWARE_VERSION     "b"
 
 /***** Motors & PWM channels supported by this hardware *****/
 // These must be defines (not enums) so expressions like this:
@@ -58,25 +49,11 @@
 #define HAS_HOBBY_SERVO_MOTOR 0
 #endif
 
-#ifndef HAS_PRESSURE
-#define HAS_PRESSURE 0
-#endif
-
-#ifndef HAS_LASER
-#define HAS_LASER 0
-#else
-#if HAS_HOBBY_SERVO_MOTOR && HAS_LASER
-#error Can NOT have a laser and a hobby servo at the same time, sorry
-#endif
-#endif
-
-
-#if QUINTIC_REVISION == 'C' or (!HAS_HOBBY_SERVO_MOTOR && !HAS_LASER)
+#if QUINTIC_REVISION == 'C' or !HAS_HOBBY_SERVO_MOTOR
 #define MOTORS      5               // number of motors on the board - 5Trinamics OR 4 Trinamics + 1 servo
 #else
-#define MOTORS      6               // number of motors on the board - 5 Trinamics + 1 servo or laser
+#define MOTORS      6               // number of motors on the board - 5 Trinamics + 1 servo
 #endif
-
 #define PWMS 2                      // number of PWM channels supported the hardware
 #define AXES 6                      // axes to support -- must be 6 or 9
 
@@ -106,6 +83,7 @@
 #include "MotateTimers.h"           // for TimerChanel<> and related...
 
 // Temporarily disabled:
+// #include "i2c_eeprom.h"
 // #include "i2c_multiplexer.h"
 // #include "i2c_as5601.h" // For AS5601
 
@@ -147,8 +125,8 @@ using Motate::OutputPin;
 
 /**** Stepper DDA and dwell timer settings ****/
 
-// #define FREQUENCY_DDA    200000UL    // Hz step frequency. Interrupts actually fire at 2x (400 KHz)
-#define FREQUENCY_DDA  400000UL  // Hz step frequency. Interrupts actually fire at 2x (300 KHz)
+#define FREQUENCY_DDA    200000UL    // Hz step frequency. Interrupts actually fire at 2x (400 KHz)
+// #define FREQUENCY_DDA  400000UL  // Hz step frequency. Interrupts actually fire at 2x (300 KHz)
 #define FREQUENCY_DWELL  1000UL
 
 // #define MIN_SEGMENT_MS ((float)0.125)       // S70 can handle much much smaller segements
@@ -171,8 +149,8 @@ typedef Motate::SPIChipSelectPinMux<Motate::kSocket1_SPISlaveSelectPinNumber, Mo
 extern SPI_CS_PinMux_used_t spiCSPinMux;
 
 /**** TWI Setup ****/
-typedef Motate::TWIBus<Motate::kI2C_SCLPinNumber, Motate::kI2C_SDAPinNumber> TWIBus_used_t;
-extern TWIBus_used_t twiBus;
+// typedef Motate::TWIBus<Motate::kI2C_SCLPinNumber, Motate::kI2C_SDAPinNumber> TWIBus_used_t;
+// extern TWIBus_used_t twiBus;
 
 // using plex0_t = decltype(I2C_Multiplexer{twiBus, 0x0070L});
 // extern HOT_DATA plex0_t plex0;
@@ -196,14 +174,16 @@ static OutputPin<Motate::kGRBL_CommonEnablePinNumber> motor_common_enable_pin;
 //static OutputPin<Motate::kSpindle_EnablePinNumber> spindle_enable_pin;
 //static OutputPin<Motate::kSpindle_DirPinNumber> spindle_dir_pin;
 
-// Input pins are defined in gpio.cpp
+// NOTE: In the v9 and the Due the flood and mist coolants are mapped to a the same pin
+//static OutputPin<kCoolant_EnablePinNumber> coolant_enable_pin;
+//static OutputPin<Motate::kCoolant_EnablePinNumber> flood_enable_pin;
+//static OutputPin<Motate::kCoolant_EnablePinNumber> mist_enable_pin;
 
+// Input pins are defined in gpio.cpp
 
 /********************************
  * Function Prototypes (Common) *
  ********************************/
-
-const configSubtable *const getSysConfig_3();
 
 void hardware_init(void);      // master hardware init
 stat_t hardware_periodic();  // callback from the main loop (time sensitive)

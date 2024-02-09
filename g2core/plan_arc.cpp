@@ -149,8 +149,8 @@ stat_t cm_arc_feed(const float target[], const bool target_f[],     // target en
         cm->arc.plane_axis_1 = AXIS_Y;
         cm->arc.linear_axis  = AXIS_Z;
     } else if (cm->gm.select_plane == CANON_PLANE_XZ) {  // G18
-        cm->arc.plane_axis_0 = AXIS_X;
-        cm->arc.plane_axis_1 = AXIS_Z;
+        cm->arc.plane_axis_0 = AXIS_Z;
+        cm->arc.plane_axis_1 = AXIS_X;
         cm->arc.linear_axis  = AXIS_Y;
     } else if (cm->gm.select_plane == CANON_PLANE_YZ) {  // G19
         cm->arc.plane_axis_0 = AXIS_Y;
